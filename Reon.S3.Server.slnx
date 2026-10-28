@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Reon.Api/Reon.Api.csproj" />
+    <Project Path="src/Reon.Core/Reon.Core.csproj" />
+    <Project Path="src/Reon.Infrastructure/Reon.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Reon.UnitTests/Reon.UnitTests.csproj" />
+  </Folder>
+</Solution>

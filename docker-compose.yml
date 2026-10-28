@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reon-s3-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reon
+      POSTGRES_USER: reon
+      POSTGRES_PASSWORD: reon_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - reon-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reon -d reon"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: reon-s3-server:dev
+    container_name: reon-s3-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=reon;Username=reon;Password=reon_dev_password
+      Database__AutoMigrate: "true"
+      # The Swift container is started by the reon-s3-dev compose project.
+      S3__ServiceUrl: http://swift:8080
+      S3__AccessKey: "test:tester"
+      S3__SecretKey: "testing"
+      S3__Region: us-east-1
+      S3__BucketName: reon-files
+      S3__ForcePathStyle: "true"
+      S3__EnsureBucket: "true"
+    ports:
+      - "8090:8080"
+    networks:
+      - default
+      - swift
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+networks:
+  swift:
+    external: true
+    name: openstack-swift-s3api_default
+
+volumes:
+  reon-postgres-data:

@@ -1,0 +1,27 @@
+## Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+## .NET build output
+bin/
+obj/
+artifacts/
+TestResults/
+coverage/
+
+## Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Local docker pull logs
+.postgres-pull.log
+.apt-postgres.log
+*.log
