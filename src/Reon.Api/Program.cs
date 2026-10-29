@@ -1,6 +1,21 @@
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+            policy
+                .SetIsOriginAllowed(origin =>
+                    origin == "null" ||
+                    (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback))
+                .AllowAnyHeader()
+                .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "QUERY"));
+    });
+}
+
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -62,6 +77,12 @@ if (app.Configuration.GetValue("Database:AutoMigrate", false))
 }
 
 app.UseExceptionHandler();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors();
+}
+
 app.UseWebSockets();
 app.UseStatusCodePages(async context =>
 {
