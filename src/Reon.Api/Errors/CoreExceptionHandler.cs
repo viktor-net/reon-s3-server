@@ -37,6 +37,30 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
                 StatusCodes.Status400BadRequest,
                 "Validation failed",
                 validation.Message),
+            StorageValidationException adminValidation => (
+                StatusCodes.Status400BadRequest,
+                "Validation failed",
+                adminValidation.Message),
+            BucketNotFoundException bucketNotFound => (
+                StatusCodes.Status404NotFound,
+                "Bucket not found",
+                bucketNotFound.Message),
+            BucketAlreadyExistsException bucketExists => (
+                StatusCodes.Status409Conflict,
+                "Bucket already exists",
+                bucketExists.Message),
+            StoredObjectNotFoundException objectNotFound => (
+                StatusCodes.Status404NotFound,
+                "Object not found",
+                objectNotFound.Message),
+            QuotaExceededException quota => (
+                StatusCodes.Status409Conflict,
+                "Bucket quota exceeded",
+                quota.Message),
+            StorageCapabilityNotSupportedException capability => (
+                StatusCodes.Status501NotImplemented,
+                "Operation is not supported by the storage provider",
+                capability.Message),
             ObjectStorageException storage => (
                 StatusCodes.Status502BadGateway,
                 "Object storage unavailable",

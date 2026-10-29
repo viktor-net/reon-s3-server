@@ -10,6 +10,7 @@ global using Microsoft.Extensions.Diagnostics.HealthChecks;
 global using Microsoft.Extensions.Options;
 global using Reon.Api.Contracts;
 global using Reon.Api.Errors;
+global using Reon.Api.Events;
 global using Reon.Api.Health;
 global using Reon.Api.OpenApi;
 global using Reon.Core.Entities;

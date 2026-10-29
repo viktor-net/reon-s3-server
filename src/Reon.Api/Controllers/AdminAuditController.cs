@@ -1,0 +1,43 @@
+namespace Reon.Api.Controllers;
+
+[Route("api/v1/admin/audit")]
+[Produces("application/json")]
+public sealed class AdminAuditController(
+    IStorageAdminService admin,
+    IStorageAuditor auditor,
+    IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
+{
+    /// <summary>Журнал административных операций: актор, ресурс, результат и необязательные JSON-детали.</summary>
+    [HttpGet]
+    [ProducesResponseType<AuditListResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    public async Task<ActionResult<AuditListResponse>> List(
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] string? actor = null,
+        [FromQuery] string? action = null,
+        [FromQuery] string? resource = null,
+        [FromQuery] string? result = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        AuditResult? auditResult = null;
+
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            if (!Enum.TryParse<AuditResult>(result, ignoreCase: true, out var parsed))
+            {
+                throw new StorageValidationException("Result must be 'Success' or 'Failure'.");
+            }
+
+            auditResult = parsed;
+        }
+
+        var auditPage = await admin.ListAuditAsync(
+            new AuditQuery(from, to, actor, action, resource, auditResult, page, pageSize),
+            cancellationToken);
+
+        return Ok(auditPage.ToResponse());
+    }
+}

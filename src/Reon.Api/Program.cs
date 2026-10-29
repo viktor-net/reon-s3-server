@@ -30,6 +30,11 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddExceptionHandler<CoreExceptionHandler>();
 
+// Administrative real-time contour: a WebSocket hub plus its keepalive loop.
+builder.Services.AddSingleton<AdminEventHub>();
+builder.Services.AddSingleton<IStorageEventPublisher>(provider => provider.GetRequiredService<AdminEventHub>());
+builder.Services.AddHostedService<AdminEventsHeartbeatService>();
+
 var maxFileSize = builder.Configuration.GetValue("FileStorage:MaxFileSizeBytes", 1_073_741_824L);
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -50,6 +55,7 @@ if (app.Configuration.GetValue("Database:AutoMigrate", false))
 }
 
 app.UseExceptionHandler();
+app.UseWebSockets();
 app.UseStatusCodePages(async context =>
 {
     var response = context.HttpContext.Response;
@@ -69,6 +75,7 @@ app.UseStatusCodePages(async context =>
 });
 
 app.MapControllers();
+app.MapAdminEvents();
 app.MapOpenApi();
 app.MapScalarApiReference(options =>
 {
