@@ -15,7 +15,7 @@ namespace Reon.Api.Controllers;
 /// <param name="adminOptions">
 /// Настройки фасада: актор по умолчанию и верхняя граница размера страницы.
 /// </param>
-[Route("api/v1/admin/buckets")]
+[Route("api/admin/buckets")]
 [Produces("application/json")]
 public sealed class AdminBucketsController(
     IStorageAdminService admin,
@@ -220,7 +220,7 @@ public sealed class AdminBucketsController(
             : request.Prefix.Trim().TrimStart('/').TrimEnd('/') + "/";
 
         return Created(
-            $"/api/v1/admin/buckets/{bucket}/objects/{Uri.EscapeDataString(prefix + request.Name.Trim() + "/")}",
+            $"/api/admin/buckets/{bucket}/objects/{Uri.EscapeDataString(prefix + request.Name.Trim() + "/")}",
             new { bucket, key = prefix + request.Name.Trim() + "/" });
     }
 

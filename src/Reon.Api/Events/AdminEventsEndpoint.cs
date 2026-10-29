@@ -13,7 +13,7 @@ public static class AdminEventsEndpoint
     public static IEndpointRouteBuilder MapAdminEvents(this IEndpointRouteBuilder endpoints)
     {
         endpoints
-            .MapGet("/api/v1/admin/events", HandleAsync)
+            .MapGet("/api/admin/events", HandleAsync)
             .ExcludeFromDescription();
 
         return endpoints;
@@ -32,7 +32,7 @@ public static class AdminEventsEndpoint
                 {
                     Status = StatusCodes.Status400BadRequest,
                     Title = "WebSocket upgrade required",
-                    Detail = "This endpoint accepts a WebSocket connection: ws(s)://<host>/api/v1/admin/events.",
+                    Detail = "This endpoint accepts a WebSocket connection: ws(s)://<host>/api/admin/events.",
                     Instance = context.Request.Path,
                 },
                 cancellationToken);

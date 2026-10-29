@@ -6,7 +6,7 @@ namespace Reon.Api.Controllers;
 /// <param name="admin">Сценарии фасада: выборка записей журнала с фильтрами.</param>
 /// <param name="auditor">Журнал операций: база контроллера пишет в него актора и результат.</param>
 /// <param name="adminOptions">Настройки фасада: актор по умолчанию и граница размера страницы.</param>
-[Route("api/v1/admin/audit")]
+[Route("api/admin/audit")]
 [Produces("application/json")]
 public sealed class AdminAuditController(
     IStorageAdminService admin,

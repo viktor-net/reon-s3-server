@@ -9,7 +9,7 @@ namespace Reon.Api.Controllers;
 /// <param name="fileOptions">Лимиты загрузки и тегов, общие с файловым API.</param>
 /// <param name="auditor">Журнал операций: актор и результат изменений.</param>
 /// <param name="adminOptions">Настройки фасада: актор по умолчанию и границы страниц.</param>
-[Route("api/v1/admin/buckets/{bucket}/objects")]
+[Route("api/admin/buckets/{bucket}/objects")]
 [Produces("application/json")]
 public sealed class AdminObjectsController(
     IStorageAdminService admin,
@@ -123,7 +123,7 @@ public sealed class AdminObjectsController(
             cancellationToken);
 
         return Created(
-            $"/api/v1/admin/buckets/{bucket}/objects/{Uri.EscapeDataString(stored.ObjectKey)}",
+            $"/api/admin/buckets/{bucket}/objects/{Uri.EscapeDataString(stored.ObjectKey)}",
             stored.ToResponse());
     }
 

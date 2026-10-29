@@ -20,6 +20,6 @@ public sealed class AdminOptions
     // Актор, который записывается, если вызывающий не передал X-Reon-Actor.
     public string DefaultActor { get; set; } = "system";
 
-    // Интервал heartbeat-кадров сервера на /api/v1/admin/events в секундах.
+    // Интервал heartbeat-кадров сервера на /api/admin/events в секундах.
     public int EventHeartbeatSeconds { get; set; } = 30;
 }

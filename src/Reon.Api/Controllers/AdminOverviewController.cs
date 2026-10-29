@@ -6,7 +6,7 @@ namespace Reon.Api.Controllers;
 /// <param name="admin">Сценарии фасада: сборка сводки по всем бакетам.</param>
 /// <param name="auditor">Журнал операций: общая запись актора и результата.</param>
 /// <param name="adminOptions">Настройки фасада: актор по умолчанию.</param>
-[Route("api/v1/admin/overview")]
+[Route("api/admin/overview")]
 [Produces("application/json")]
 public sealed class AdminOverviewController(
     IStorageAdminService admin,

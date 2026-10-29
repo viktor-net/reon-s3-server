@@ -70,92 +70,92 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         }
 
         if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-            path.Equals("api/v1/files", StringComparison.OrdinalIgnoreCase))
+            path.Equals("api/files", StringComparison.OrdinalIgnoreCase))
         {
             TransformUpload(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/{fileId}", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/{fileId}", StringComparison.OrdinalIgnoreCase))
         {
             TransformDownload(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/{fileId}/metadata", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/{fileId}/metadata", StringComparison.OrdinalIgnoreCase))
         {
             TransformMetadata(operation);
         }
         else if (method.Equals("DELETE", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/{fileId}", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/{fileId}", StringComparison.OrdinalIgnoreCase))
         {
             TransformDelete(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files", StringComparison.OrdinalIgnoreCase))
         {
             TransformList(operation);
         }
         else if (method.Equals("HEAD", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/{fileId}", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/{fileId}", StringComparison.OrdinalIgnoreCase))
         {
             TransformHead(operation);
         }
         else if (method.Equals("PATCH", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/{fileId}/metadata", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/{fileId}/metadata", StringComparison.OrdinalIgnoreCase))
         {
             TransformUpdateMetadata(operation);
         }
         else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/{fileId}/copy", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/{fileId}/copy", StringComparison.OrdinalIgnoreCase))
         {
             TransformCopy(operation);
         }
         else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/files/bulk-delete", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/files/bulk-delete", StringComparison.OrdinalIgnoreCase))
         {
             TransformBulkDelete(operation);
         }
         else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads", StringComparison.OrdinalIgnoreCase))
         {
             TransformInitiateUpload(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads", StringComparison.OrdinalIgnoreCase))
         {
             TransformUploadList(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads/{uploadId}", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads/{uploadId}", StringComparison.OrdinalIgnoreCase))
         {
             TransformUploadGet(operation);
         }
         else if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads/{uploadId}/parts/{partNumber}", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads/{uploadId}/parts/{partNumber}", StringComparison.OrdinalIgnoreCase))
         {
             TransformUploadPart(operation);
         }
         else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads/{uploadId}/complete", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads/{uploadId}/complete", StringComparison.OrdinalIgnoreCase))
         {
             TransformUploadComplete(operation);
         }
         else if (method.Equals("DELETE", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads/{uploadId}", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads/{uploadId}", StringComparison.OrdinalIgnoreCase))
         {
             TransformUploadAbort(operation);
         }
         else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/uploads/{uploadId}/abort", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/uploads/{uploadId}/abort", StringComparison.OrdinalIgnoreCase))
         {
             TransformUploadAbort(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/storage/stats", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/storage/stats", StringComparison.OrdinalIgnoreCase))
         {
             TransformStorageStats(operation);
         }
         else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
-                 path.Equals("api/v1/storage/info", StringComparison.OrdinalIgnoreCase))
+                 path.Equals("api/storage/info", StringComparison.OrdinalIgnoreCase))
         {
             TransformStorageInfo(operation);
         }

@@ -15,8 +15,8 @@ builder.Services.AddOpenApi(options =>
         document.Info.Title = "Reon S3 Server";
         document.Info.Description =
             "Сервис хранения файлов и учёта их описаний.\n\n" +
-            "Базовый API (/api/v1/files, /api/v1/uploads, /api/v1/storage) работает с " +
-            "файловым доменом в одном бакете; административный фасад (/api/v1/admin) — " +
+            "Базовый API (/api/files, /api/uploads, /api/storage) работает с " +
+            "файловым доменом в одном бакете; административный фасад (/api/admin) — " +
             "со всеми бакетами S3: сырыми объектами, версиями, квотами и журналом.\n\n" +
             "Хранилище — S3-совместимый провайдер (Swift s3api, MinIO, AWS S3). Часть " +
             "административных возможностей зависит от провайдера: на запись недоступная " +

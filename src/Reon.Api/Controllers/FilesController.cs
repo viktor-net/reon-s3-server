@@ -7,7 +7,7 @@ namespace Reon.Api.Controllers;
 /// <param name="auditor">Журнал операций: запись актора и результата каждой операции.</param>
 /// <param name="adminOptions">Настройки: актор по умолчанию, если X-Reon-Actor не передан.</param>
 [ApiController]
-[Route("api/v1/files")]
+[Route("api/files")]
 public sealed class FilesController(
     FileStorageService fileStorage,
     IStorageAuditor auditor,
@@ -76,7 +76,7 @@ public sealed class FilesController(
             cancellationToken);
 
         var response = FileMetadataResponse.FromEntity(file);
-        return Created($"/api/v1/files/{file.Id}", response);
+        return Created($"/api/files/{file.Id}", response);
     }
 
     [HttpGet]
@@ -206,7 +206,7 @@ public sealed class FilesController(
             new { sourceFileId = fileId },
             cancellationToken);
 
-        return Created($"/api/v1/files/{copy.Id}", FileMetadataResponse.FromEntity(copy));
+        return Created($"/api/files/{copy.Id}", FileMetadataResponse.FromEntity(copy));
     }
 
     [HttpPost("bulk-delete")]

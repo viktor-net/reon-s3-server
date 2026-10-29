@@ -8,7 +8,7 @@ namespace Reon.Api.Controllers;
 /// <param name="options">Лимиты частей и срок жизни сессии.</param>
 /// <param name="adminOptions">Настройки фасада: актор по умолчанию.</param>
 [ApiController]
-[Route("api/v1/uploads")]
+[Route("api/uploads")]
 [Produces("application/json")]
 public sealed class UploadsController(
     IMultipartUploadService uploads,
@@ -143,7 +143,7 @@ public sealed class UploadsController(
             new { fileId = file.Id, file.Size },
             cancellationToken);
 
-        return Created($"/api/v1/files/{file.Id}", FileMetadataResponse.FromEntity(file));
+        return Created($"/api/files/{file.Id}", FileMetadataResponse.FromEntity(file));
     }
 
     [HttpDelete("{uploadId:guid}")]

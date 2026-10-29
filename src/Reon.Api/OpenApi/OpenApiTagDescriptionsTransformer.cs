@@ -36,7 +36,7 @@ public sealed class OpenApiTagDescriptionsTransformer : IOpenApiDocumentTransfor
         ["AdminObjects"] =
             "Работа с сырыми объектами S3 по паре bucket + key, без строки files в " +
             "Postgres. Такие объекты не получают SHA-256 и статусы файлового домена и не " +
-            "участвуют в фоновой сверке; для файлового домена используйте /api/v1/files.\n\n" +
+            "участвуют в фоновой сверке; для файлового домена используйте /api/files.\n\n" +
             "Список — это листинг S3: поиск по подстроке эмулируется в памяти (до " +
             "Admin:MaxSearchObjects объектов), «папки» — общие префиксы. В пути ключ " +
             "кодируется: слэш передаётся как %2F.\n\n" +
@@ -59,7 +59,7 @@ public sealed class OpenApiTagDescriptionsTransformer : IOpenApiDocumentTransfor
             "Базовый файловый API: единица работы — fileId, метаданные и статусы хранятся " +
             "в Postgres, объект лежит в одном бакете по умолчанию (S3:BucketName). " +
             "Загрузка проходит Pending → Ready, считает SHA-256 и учитывает квоту бакета; " +
-            "multipart-загрузка — через /api/v1/uploads.\n\n" +
+            "multipart-загрузка — через /api/uploads.\n\n" +
             "Удаление мягкое: строка остаётся для аудита, объект удаляется сразу или " +
             "фоновой сверкой. API не показывает сырые объекты, версии и presigned URL — " +
             "для этого есть административный фасад. Файлы, загруженные через фасад, в " +
@@ -79,7 +79,7 @@ public sealed class OpenApiTagDescriptionsTransformer : IOpenApiDocumentTransfor
             "распределение по статусам и типам) и параметры текущего бакета — имя, " +
             "префикс ключей и максимальный размер файла.\n\n" +
             "Это данные файлового домена для одного бакета по умолчанию; агрегаты по всем " +
-            "бакетам и использование S3 — в /api/v1/admin/overview.",
+            "бакетам и использование S3 — в /api/admin/overview.",
     };
 
     public Task TransformAsync(

@@ -7,7 +7,7 @@ namespace Reon.Api.Controllers;
 /// <param name="objectStorage">Объектное хранилище: имя бакета для ответа.</param>
 /// <param name="options">Лимиты файлового API: префикс ключей и максимальный размер.</param>
 [ApiController]
-[Route("api/v1/storage")]
+[Route("api/storage")]
 [Produces("application/json")]
 public sealed class StorageController(
     FileStorageService files,
