@@ -1,4 +1,5 @@
 using Serilog;
+using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -96,7 +97,18 @@ if (app.Configuration.GetValue("Database:AutoMigrate", false))
     await dbContext.Database.MigrateAsync();
 }
 
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    options.GetLevel = (httpContext, _, exception) =>
+        exception is not null
+            ? LogEventLevel.Error
+            : httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError &&
+              httpContext.Response.StatusCode != StatusCodes.Status501NotImplemented
+                ? LogEventLevel.Error
+                : httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError
+                    ? LogEventLevel.Warning
+                    : LogEventLevel.Information;
+});
 
 app.UseExceptionHandler();
 
