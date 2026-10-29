@@ -1,0 +1,7 @@
+# Хранить текст в репозитории с LF, а в рабочей копии — с CRLF,
+# как задано в .editorconfig. Исключения — файлы контейнера и shell.
+* text=auto eol=crlf
+
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+*.sh text eol=lf
