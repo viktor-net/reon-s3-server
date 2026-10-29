@@ -41,14 +41,42 @@
 
 ## Что умеет
 
-- `POST /api/v1/files` — загрузка файла, возвращает `fileId`.
-- `GET /api/v1/files/{fileId}` — получение файла бинарным потоком.
-- `GET /api/v1/files/{fileId}/metadata` — получение метаданных в JSON.
-- `DELETE /api/v1/files/{fileId}` — удаление файла.
-- OpenAPI + Scalar UI.
-- У методов OpenAPI есть описания и примеры запросов/ответов.
-- Фоновая сверка Postgres и S3, очистка orphan-объектов и незавершённых multipart upload.
+- Загрузка файла с возвратом `fileId`.
+- Скачивание файла, `HEAD` и получение описания.
+- Список файлов с фильтрами, сортировкой и страницами.
+- Изменение имени, описания и тегов без перезагрузки файла.
+- Копирование файла и массовое удаление.
+- Явные multipart-сессии: начать, загрузить части, завершить, прервать, посмотреть статус.
+- Статистика и информация о хранилище.
+- OpenAPI + Scalar UI с примерами.
+- Фоновая сверка Postgres и S3, очистка orphan-объектов и зависших multipart upload.
 - Health checks `/health/live` и `/health/ready`.
+
+## Реестр эндпоинтов
+
+Клиентской аутентификации нет: сервис рассчитан на доверенный внутренний контур.
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| `POST` | `/api/v1/files` | Загрузить файл, вернуть `fileId` |
+| `GET` | `/api/v1/files` | Список файлов с фильтрами |
+| `GET` | `/api/v1/files/{fileId}` | Скачать файл |
+| `HEAD` | `/api/v1/files/{fileId}` | Заголовки файла без тела |
+| `GET` | `/api/v1/files/{fileId}/metadata` | Получить описание |
+| `PATCH` | `/api/v1/files/{fileId}/metadata` | Изменить имя, описание, теги |
+| `DELETE` | `/api/v1/files/{fileId}` | Удалить файл |
+| `POST` | `/api/v1/files/{fileId}/copy` | Скопировать файл |
+| `POST` | `/api/v1/files/bulk-delete` | Удалить несколько файлов |
+| `POST` | `/api/v1/uploads` | Начать multipart-загрузку |
+| `GET` | `/api/v1/uploads` | Список активных multipart-загрузок |
+| `GET` | `/api/v1/uploads/{uploadId}` | Статус загрузки и список частей |
+| `PUT` | `/api/v1/uploads/{uploadId}/parts/{partNumber}` | Загрузить часть |
+| `POST` | `/api/v1/uploads/{uploadId}/complete` | Завершить загрузку и создать файл |
+| `DELETE` | `/api/v1/uploads/{uploadId}` | Прервать загрузку |
+| `POST` | `/api/v1/uploads/{uploadId}/abort` | Прервать загрузку (алиас) |
+| `GET` | `/api/v1/storage/stats` | Статистика по файлам |
+| `GET` | `/api/v1/storage/info` | Бакет, лимиты и настройки |
+| `GET` | `/health/live`, `/health/ready` | Проверки живости и готовности |
 
 ## Архитектура
 
@@ -87,10 +115,15 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   ├── Reon.Api/
 │   │   ├── Program.cs                     # DI, middleware, OpenAPI/Scalar, health checks
 │   │   ├── Controllers/
-│   │   │   └── FilesController.cs         # четыре HTTP-операции
+│   │   │   ├── FilesController.cs         # файлы: загрузка, список, скачивание, PATCH, copy
+│   │   │   ├── UploadsController.cs       # multipart-сессии
+│   │   │   └── StorageController.cs       # статистика и информация о хранилище
 │   │   ├── Contracts/
 │   │   │   ├── UploadFileRequest.cs       # multipart: файл + JSON-описание
-│   │   │   └── FileMetadataResponse.cs
+│   │   │   ├── FileMetadataResponse.cs
+│   │   │   ├── FilesContracts.cs          # список, PATCH, copy, bulk delete
+│   │   │   ├── MultipartContracts.cs      # сессии загрузки и части
+│   │   │   └── StorageInfoResponse.cs
 │   │   ├── Errors/
 │   │   │   └── CoreExceptionHandler.cs    # доменные ошибки → ProblemDetails
 │   │   ├── Health/
@@ -106,16 +139,21 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   ├── Reon.Core/
 │   │   ├── GlobalUsings.cs                # общие using для домена
 │   │   ├── Entities/
-│   │   │   └── FileMetadata.cs            # доменная модель и переходы статусов
+│   │   │   ├── FileMetadata.cs            # доменная модель и переходы статусов
+│   │   │   ├── MultipartUpload.cs         # состояние multipart-сессии
+│   │   │   └── MultipartUploadPart.cs     # загруженная часть
 │   │   ├── Enums/
-│   │   │   └── FileStatus.cs              # Pending/Ready/Deleting/...
+│   │   │   ├── FileStatus.cs              # Pending/Ready/Deleting/...
+│   │   │   └── MultipartUploadStatus.cs   # Initiated/InProgress/...
 │   │   ├── Exceptions/                    # доменные ошибки
-│   │   ├── Interfaces/                    # IObjectStorage, IFileMetadataRepository, IClock...
-│   │   ├── Models/                        # UploadFileCommand, FileContent, DeleteOutcome
+│   │   ├── Interfaces/                    # IObjectStorage, IMultipartUploadService, IClock...
+│   │   ├── Models/                        # UploadFileCommand, FileListQuery, StorageStats
 │   │   ├── Options/
 │   │   │   └── FileStorageOptions.cs      # лимиты, таймауты, префикс ключей
 │   │   └── Services/
-│   │       └── FileStorageService.cs      # загрузка, выдача и удаление файлов
+│   │       ├── FileInput.cs               # общая валидация и построение ключа
+│   │       ├── FileStorageService.cs      # загрузка, выдача и удаление файлов
+│   │       └── MultipartUploadService.cs  # явные multipart-сессии
 │   └── Reon.Infrastructure/
 │       ├── GlobalUsings.cs                # общие using для инфраструктуры
 │       ├── Configuration/
@@ -123,13 +161,16 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │       ├── Persistence/
 │       │   ├── ReonDbContext.cs
 │       │   ├── Configurations/
-│       │   │   └── FileMetadataConfiguration.cs
+│       │   │   ├── FileMetadataConfiguration.cs
+│       │   │   └── MultipartUploadConfiguration.cs
 │       │   ├── FileMetadataRepository.cs
-│       │   └── Migrations/                   # миграция InitialCreate
+│       │   ├── MultipartUploadRepository.cs
+│       │   └── Migrations/                # InitialCreate, multipart, индексы списка
 │       ├── Reconciliation/
 │       │   ├── ReconciliationService.cs
 │       │   ├── ReconciliationBackgroundService.cs
-│       │   └── OrphanSweepBackgroundService.cs
+│       │   ├── OrphanSweepBackgroundService.cs
+│       │   └── MultipartCleanupBackgroundService.cs
 │       ├── Services/
 │       │   └── SystemClock.cs
 │       ├── Storage/
@@ -141,6 +182,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
     └── Reon.UnitTests/
         ├── GlobalUsings.cs                # общие using для тестов
         ├── FileStorageServiceTests.cs
+        ├── MultipartUploadServiceTests.cs
         └── Fakes/                          # тестовые реализации хранилища и репозитория
 ```
 
@@ -296,6 +338,150 @@ curl -X DELETE http://localhost:8090/api/v1/files/{fileId}
 `FileStorage:DeletedRetentionDays` (по умолчанию 30 дней) её удаляет background
 worker. `0` — хранить бессрочно.
 
+### Список файлов
+
+```bash
+curl 'http://localhost:8090/api/v1/files?page=1&pageSize=50&status=Ready&sort=-createdAt'
+```
+
+Фильтры:
+
+- `status` — `Pending`, `Ready`, `Deleting`, `Failed`, `Missing`, `Corrupted`.
+- `contentType` — точное совпадение.
+- `originalName` — поиск подстроки по имени.
+- `createdFrom`, `createdTo` — границы по времени создания.
+- `sort` — `createdAt`, `-createdAt`, `size`, `-size`, `originalName`, `-originalName`.
+- `page`, `pageSize` — страницы, `pageSize` максимум 200.
+
+Ответ:
+
+```json
+{
+  "items": [ ... ],
+  "total": 120,
+  "page": 1,
+  "pageSize": 50
+}
+```
+
+### HEAD
+
+```bash
+curl -I http://localhost:8090/api/v1/files/{fileId}
+```
+
+Возвращает `Content-Type`, `Content-Length`, `ETag` без тела. Если файл не
+`Ready`, будет `409`.
+
+### Изменение описания
+
+```bash
+curl -X PATCH http://localhost:8090/api/v1/files/{fileId}/metadata \
+  -H 'Content-Type: application/json' \
+  -d '{"originalName":"new.png","description":"новое описание","tags":{"kind":"avatar"}}'
+```
+
+- `null` или отсутствующее поле — оставить как есть.
+- `description: ""` — очистить описание.
+- `tags: {}` — очистить теги.
+- `originalName` меняет имя при скачивании, но **не** переименовывает объект в S3.
+
+### Копирование
+
+```bash
+curl -X POST http://localhost:8090/api/v1/files/{fileId}/copy \
+  -H 'Content-Type: application/json' \
+  -d '{"originalName":"copy.png","description":"копия"}'
+```
+
+Создаёт новый `fileId`, копирует объект в S3 и описание в Postgres.
+
+### Массовое удаление
+
+```bash
+curl -X POST http://localhost:8090/api/v1/files/bulk-delete \
+  -H 'Content-Type: application/json' \
+  -d '{"fileIds":["..."],"continueOnError":true}'
+```
+
+До 100 уникальных `fileId`. В ответе — результат по каждому файлу
+(`Deleted`, `AlreadyDeleted`, `Deleting`, `NotFound`, `Failed`).
+
+### Multipart upload
+
+Для больших файлов клиент может загружать части явно. S3 upload id и
+S3-авторизация остаются внутри сервиса; клиент видит только `uploadId`.
+
+1. Начать загрузку:
+
+```bash
+curl -X POST http://localhost:8090/api/v1/uploads \
+  -H 'Content-Type: application/json' \
+  -d '{"originalName":"big.bin","contentType":"application/octet-stream","description":"большой файл"}'
+```
+
+Ответ `201 Created`:
+
+```json
+{
+  "uploadId": "...",
+  "fileId": "...",
+  "status": "Initiated",
+  "partSize": 16777216,
+  "minPartSize": 5242880,
+  "maxParts": 10000,
+  "expiresAt": "2026-11-05T10:00:00+00:00",
+  "parts": []
+}
+```
+
+2. Загрузить часть:
+
+```bash
+curl -X PUT http://localhost:8090/api/v1/uploads/{uploadId}/parts/1 \
+  -H 'Content-Type: application/octet-stream' \
+  --data-binary @part1.bin
+```
+
+`Content-Length` обязателен. Все части, кроме последней, должны быть не меньше
+`MinMultipartPartSizeBytes` (5 MiB). Части можно загружать в любом порядке, но
+номера должны быть последовательными при завершении.
+
+3. Посмотреть статус и части:
+
+```bash
+curl http://localhost:8090/api/v1/uploads/{uploadId}
+```
+
+4. Завершить:
+
+```bash
+curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/complete
+```
+
+Ответ `201 Created` с обычными метаданными файла. Сервис проверяет размер,
+считает SHA-256, создаёт запись в Postgres и возвращает `fileId`.
+
+5. Прервать загрузку:
+
+```bash
+curl -X DELETE http://localhost:8090/api/v1/uploads/{uploadId}
+```
+
+или:
+
+```bash
+curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/abort
+```
+
+Оба варианта вызывают `AbortMultipartUpload` в S3. Повторный abort уже
+прерванной загрузки идемпотентен.
+
+Незавершённые загрузки живут `FileStorage:MultipartUploadLifetimeDays`
+(по умолчанию 7 дней, можно поставить 3–7). Фоновая очистка раз в
+`MultipartCleanupIntervalMinutes` абортит истёкшие сессии и S3 multipart upload
+старше этого срока, чтобы не утекало место в хранилище.
+
 ### Ошибки
 
 Все ошибки — `application/problem+json` (RFC 9457):
@@ -315,7 +501,9 @@ worker. `0` — хранить бессрочно.
 |---|---|
 | `400` | Пустой файл, неверный JSON metadata, превышены лимиты тегов/описания |
 | `404` | Файл не найден или удалён |
-| `409` | Файл ещё не `Ready` или уже недоступен |
+| `409` | Файл не `Ready`, multipart-загрузка уже завершена/прервана или неактивна |
+| `410` | Multipart-загрузка истекла |
+| `411` | Для части не передан `Content-Length` |
 | `413` | Файл больше `FileStorage:MaxFileSizeBytes` |
 | `502` | S3 недоступен |
 | `503` | Postgres/сервис недоступен |
@@ -339,7 +527,11 @@ worker. `0` — хранить бессрочно.
 | `FileStorage:DefaultOwner` | `system` | Служебное значение поля `owner` |
 | `FileStorage:MaxFileSizeBytes` | `1073741824` | Максимальный размер файла (1 GiB) |
 | `FileStorage:MultipartThresholdBytes` | `67108864` | Порог multipart (64 MiB) |
-| `FileStorage:MultipartPartSizeBytes` | `16777216` | Размер части (16 MiB, минимум 5 MiB) |
+| `FileStorage:MultipartPartSizeBytes` | `16777216` | Рекомендуемый размер части (16 MiB) |
+| `FileStorage:MinMultipartPartSizeBytes` | `5242880` | Минимум для всех частей, кроме последней |
+| `FileStorage:MaxMultipartParts` | `10000` | Максимум частей в одной загрузке |
+| `FileStorage:MultipartUploadLifetimeDays` | `7` | Срок жизни незавершённой загрузки |
+| `FileStorage:MultipartCleanupIntervalMinutes` | `60` | Интервал очистки зависших загрузок |
 | `FileStorage:KeyPrefix` | `files/` | Префикс ключей |
 | `FileStorage:PendingTimeoutMinutes` | `60` | Когда сверка начинает разбирать `Pending` |
 | `FileStorage:DeletingRetryMinutes` | `5` | Интервал повтора удаления |
@@ -430,12 +622,37 @@ deleted_at timestamptz
 `owner` — служебное поле, сейчас всегда `system`; для проверки доступа оно не
 используется.
 
+Таблицы multipart-загрузок:
+
+```
+multipart_uploads
+  id uuid pk
+  file_id uuid
+  storage_upload_id varchar(512) unique
+  bucket, object_key, original_name, content_type
+  description, tags jsonb, owner
+  status varchar(32)
+  created_at, updated_at, expires_at, completed_at
+  failure_reason varchar(1000)
+
+multipart_upload_parts
+  upload_id uuid fk → multipart_uploads.id
+  part_number int
+  etag varchar(128)
+  size bigint
+  uploaded_at timestamptz
+  pk (upload_id, part_number)
+```
+
 Индексы:
 
 - `ux_files_bucket_object_key` — уникальность объекта.
 - `ix_files_status_updated_at` — выборка `Pending`/`Deleting` для сверки.
 - `ix_files_status_deleted_at` — очистка soft-deleted строк, partial index.
 - `ix_files_owner` — служебный индекс; для доступа сейчас не используется.
+- `ix_files_status_created_at`, `ix_files_created_at` — список и сортировка.
+- `ix_files_content_type`, `ix_files_original_name` — фильтры списка.
+- `ix_multipart_uploads_status_expires_at` — очистка зависших загрузок.
 
 ## S3 и multipart
 
@@ -444,9 +661,12 @@ deleted_at timestamptz
   файла; имя файла целиком в ключ не попадает. Старые объекты, загруженные до
   этого изменения, остаются без расширения в ключе.
 - До 64 MiB — обычный `PutObject`, больше — multipart с частью 16 MiB.
+- Для больших файлов доступны явные multipart-сессии: `POST /api/v1/uploads`,
+  части, complete/abort. S3 upload id наружу не отдаётся.
 - При ошибке multipart вызывается `AbortMultipartUpload`.
-- Дополнительно при каждой фоновой сверке сервис абортит незавершённые upload
-  старше часа. Это защита от утечки места в S3, а не памяти.
+- Истёкшие multipart-сессии и S3 upload старше
+  `MultipartUploadLifetimeDays` (по умолчанию 7 дней) абортятся фоновой очисткой.
+  Это защита от утечки места в S3, а не памяти.
 - Сервис проверяет размер и SHA-256 после загрузки через metadata объекта.
 - Бакет создаётся при старте, если `S3:EnsureBucket=true`.
 
@@ -466,12 +686,12 @@ deleted_at timestamptz
 dotnet test
 ```
 
-Unit-тесты покрывают успешную загрузку, ошибку S3, потерю объекта, удаление
-и превышение размера.
+Unit-тесты покрывают успешную загрузку, ошибку S3, потерю объекта, удаление,
+превышение размера и multipart-сессии. Всего 8 тестов.
 
 S3-слой дополнительно проверен вручную против `swift-s3api`: создание бакета,
-`PutObject`, `HeadObject` с metadata, `GetObject`, `DeleteObject` и multipart
-upload размером 6 MiB.
+`PutObject`, `HeadObject` с metadata, `GetObject`, `DeleteObject`,
+multipart upload размером 6 MiB и явные multipart-сессии.
 
 ## Решения по неоднозначностям
 
@@ -484,22 +704,21 @@ upload размером 6 MiB.
 | Кто пишет в S3 | Только этот сервис |
 | Аутентификация клиентов | Не реализована; сервис для доверенного внутреннего контура |
 | Что такое `version` | Бизнес-версия, сейчас всегда `1`; версия S3-объекта хранится отдельно в `s3_version_id` |
-| Базовый путь | `/api/v1/files` |
-| Формат загрузки | `multipart/form-data`: часть `file` + необязательная JSON-строка `metadata` |
+| Базовый путь | `/api/v1/files`, `/api/v1/uploads`, `/api/v1/storage` |
+| Формат загрузки | `multipart/form-data` для простой; бинарные части для явного multipart |
 | Формат метаданных и ошибок | JSON; ошибки — RFC 9457 ProblemDetails |
 | Формат содержимого | Бинарный поток, без base64 |
 | Удаление | Soft delete в Postgres + удаление объекта из S3; ответ 204/202 |
 | Повторное удаление | Идемпотентно: 204, если уже удалён |
 | Перезапись | Нет: каждый upload создаёт новый `fileId` |
-| Листинг | Нет: только четыре операции из требований |
+| Листинг | Есть: `GET /api/v1/files` с фильтрами и страницами |
 | Range, presigned URL, S3 versioning | Нет |
 | Максимальный размер | 1 GiB, настраивается |
-| Multipart | Скрыт внутри `IObjectStorage`; порог 64 MiB, часть 16 MiB |
+| Multipart | Автоматический для простой загрузки >64 MiB и явные сессии `/api/v1/uploads` |
 | Один инстанс или несколько | Несколько инстансов безопасны: сверка берёт Postgres advisory lock |
 
 ## Осознанные ограничения
 
-- Нет листинга файлов: в требованиях только четыре операции.
 - Нет перезаписи: каждый upload создаёт новый `fileId`.
 - Нет S3 versioning и presigned URL: наружу отдаётся только REST-фасад.
 - Нет Range-запросов: файл отдаётся целиком.
@@ -507,6 +726,8 @@ upload размером 6 MiB.
 - Нет антивируса и content-scanning.
 - Клиентской аутентификации нет: сервис нельзя публиковать в недоверенную сеть
   без внешнего шлюза. Scalar UI тоже открыт.
+- Поиск по `originalName` — подстрочный; для больших каталогов нужен trigram
+  или отдельный поисковый индекс.
 - Если объект физически потерян, сервис фиксирует `Missing`, но не восстанавливает
   байты. Для восстановления нужен backup или S3 versioning.
 - Orphan sweep загружает все активные `fileId` (`Pending`/`Ready`) из Postgres в память.

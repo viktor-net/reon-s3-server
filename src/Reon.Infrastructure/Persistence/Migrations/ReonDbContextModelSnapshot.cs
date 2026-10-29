@@ -124,12 +124,24 @@ namespace Reon.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContentType")
+                        .HasDatabaseName("ix_files_content_type");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_files_created_at");
+
+                    b.HasIndex("OriginalName")
+                        .HasDatabaseName("ix_files_original_name");
+
                     b.HasIndex("Owner")
                         .HasDatabaseName("ix_files_owner");
 
                     b.HasIndex("Bucket", "ObjectKey")
                         .IsUnique()
                         .HasDatabaseName("ux_files_bucket_object_key");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_files_status_created_at");
 
                     b.HasIndex("Status", "DeletedAt")
                         .HasDatabaseName("ix_files_status_deleted_at")
@@ -142,6 +154,144 @@ namespace Reon.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_files_status", "\"status\" IN ('Pending', 'Ready', 'Deleting', 'Deleted', 'Failed', 'Missing', 'Corrupted')");
                         });
+                });
+
+            modelBuilder.Entity("Reon.Core.Entities.MultipartUpload", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Bucket")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("bucket");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("object_key");
+
+                    b.Property<string>("OriginalName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("original_name");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("owner");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StorageUploadId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("storage_upload_id");
+
+                    b.Property<JsonDocument>("Tags")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FileId")
+                        .HasDatabaseName("ix_multipart_uploads_file_id");
+
+                    b.HasIndex("StorageUploadId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_multipart_uploads_storage_upload_id");
+
+                    b.HasIndex("Status", "ExpiresAt")
+                        .HasDatabaseName("ix_multipart_uploads_status_expires_at");
+
+                    b.ToTable("multipart_uploads", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_multipart_uploads_status", "\"status\" IN ('Initiated', 'InProgress', 'Completing', 'Completed', 'Aborted', 'Expired', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Reon.Core.Entities.MultipartUploadPart", b =>
+                {
+                    b.Property<Guid>("UploadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("upload_id");
+
+                    b.Property<int>("PartNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("part_number");
+
+                    b.Property<string>("ETag")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("etag");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("uploaded_at");
+
+                    b.HasKey("UploadId", "PartNumber");
+
+                    b.ToTable("multipart_upload_parts", (string)null);
+                });
+
+            modelBuilder.Entity("Reon.Core.Entities.MultipartUploadPart", b =>
+                {
+                    b.HasOne("Reon.Core.Entities.MultipartUpload", null)
+                        .WithMany()
+                        .HasForeignKey("UploadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

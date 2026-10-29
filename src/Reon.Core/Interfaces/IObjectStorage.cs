@@ -12,6 +12,20 @@ public sealed record StoredObject(
     long Size,
     string? VersionId);
 
+public sealed record StoredMultipartUpload(
+    string ObjectKey,
+    string StorageUploadId,
+    DateTimeOffset InitiatedAt);
+
+public sealed record StoredPart(
+    int PartNumber,
+    string ETag,
+    long Size);
+
+public sealed record MultipartPartETag(
+    int PartNumber,
+    string ETag);
+
 public sealed record ObjectInfo(
     string ObjectKey,
     long Size,
@@ -32,6 +46,39 @@ public interface IObjectStorage
     Task<StoredObject> PutAsync(
         ObjectStoragePutRequest request,
         Stream content,
+        CancellationToken cancellationToken);
+
+    Task<StoredObject> CopyAsync(
+        string sourceObjectKey,
+        string destinationObjectKey,
+        string contentType,
+        long contentLength,
+        IReadOnlyDictionary<string, string>? metadata,
+        CancellationToken cancellationToken);
+
+    Task<StoredMultipartUpload> InitiateMultipartUploadAsync(
+        string objectKey,
+        string contentType,
+        IReadOnlyDictionary<string, string>? metadata,
+        CancellationToken cancellationToken);
+
+    Task<StoredPart> UploadPartAsync(
+        string objectKey,
+        string storageUploadId,
+        int partNumber,
+        Stream content,
+        long contentLength,
+        CancellationToken cancellationToken);
+
+    Task<StoredObject> CompleteMultipartUploadAsync(
+        string objectKey,
+        string storageUploadId,
+        IReadOnlyList<MultipartPartETag> parts,
+        CancellationToken cancellationToken);
+
+    Task AbortMultipartUploadAsync(
+        string objectKey,
+        string storageUploadId,
         CancellationToken cancellationToken);
 
     /// <summary>Returns null when the object does not exist.</summary>

@@ -148,11 +148,131 @@ public sealed partial class FileStorageService
         return new FileContent(stream, file.OriginalName, file.ContentType, file.Size, file.ETag);
     }
 
+    public Task<FileListResult> ListAsync(
+        FileListQuery query,
+        CancellationToken cancellationToken)
+    {
+        return _repository.ListAsync(query, cancellationToken);
+    }
+
+    public Task<StorageStats> GetStatsAsync(CancellationToken cancellationToken)
+    {
+        return _repository.GetStatsAsync(cancellationToken);
+    }
+
+    public async Task<FileMetadata> UpdateMetadataAsync(
+        Guid fileId,
+        string? originalName,
+        string? description,
+        IReadOnlyDictionary<string, string>? tags,
+        CancellationToken cancellationToken)
+    {
+        var file = await GetExistingFileAsync(fileId, cancellationToken);
+        if (file.Status != FileStatus.Ready)
+        {
+            throw new FileNotReadyException(file.Id, file.Status);
+        }
+
+        var normalizedName = originalName is null
+            ? file.OriginalName
+            : FileInput.NormalizeOriginalName(originalName, _options);
+
+        var normalizedDescription = description is null
+            ? file.Description
+            : FileInput.NormalizeDescription(description, _options);
+
+        var normalizedTags = tags is null
+            ? file.Tags
+            : FileInput.NormalizeTags(tags, _options);
+
+        file.UpdateMetadata(normalizedName, normalizedDescription, normalizedTags, _clock.UtcNow);
+        await _repository.SaveChangesAsync(cancellationToken);
+
+        return file;
+    }
+
+    public async Task<FileMetadata> CopyAsync(
+        Guid sourceFileId,
+        CopyFileCommand command,
+        CancellationToken cancellationToken)
+    {
+        var source = await GetExistingFileAsync(sourceFileId, cancellationToken);
+        if (source.Status != FileStatus.Ready)
+        {
+            throw new FileNotReadyException(source.Id, source.Status);
+        }
+
+        var originalName = command.OriginalName is null
+            ? source.OriginalName
+            : FileInput.NormalizeOriginalName(command.OriginalName, _options);
+
+        var description = command.Description is null
+            ? source.Description
+            : FileInput.NormalizeDescription(command.Description, _options);
+
+        var tags = command.Tags is null
+            ? source.Tags
+            : FileInput.NormalizeTags(command.Tags, _options);
+
+        var fileId = Guid.CreateVersion7();
+        var objectKey = FileInput.BuildObjectKey(fileId, originalName, _options);
+        var now = _clock.UtcNow;
+
+        var stored = await _objectStorage.CopyAsync(
+            source.ObjectKey,
+            objectKey,
+            source.ContentType,
+            source.Size,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["reon-file-id"] = fileId.ToString("D"),
+                ["reon-sha256"] = source.Sha256,
+            },
+            cancellationToken);
+
+        var copy = FileMetadata.CreatePending(
+            fileId,
+            source.Bucket,
+            objectKey,
+            originalName,
+            source.ContentType,
+            source.Size,
+            source.Sha256,
+            _options.DefaultOwner,
+            description,
+            tags,
+            version: 1,
+            now: now);
+
+        try
+        {
+            await _repository.AddAsync(copy, cancellationToken);
+            await _repository.SaveChangesAsync(cancellationToken);
+
+            copy.MarkReady(stored.ETag, stored.VersionId, _clock.UtcNow);
+            await _repository.SaveChangesAsync(cancellationToken);
+
+            return copy;
+        }
+        catch
+        {
+            try
+            {
+                await _objectStorage.DeleteAsync(objectKey, CancellationToken.None);
+            }
+            catch (Exception cleanupException)
+            {
+                LogCleanupFailed(_logger, cleanupException, objectKey);
+            }
+
+            throw;
+        }
+    }
+
     public async Task<DeleteOutcome> DeleteAsync(
         Guid fileId,
         CancellationToken cancellationToken)
-    {
-        var file = await _repository.GetByIdAsync(fileId, cancellationToken);
+    {        var file = await _repository.GetByIdAsync(fileId, cancellationToken);
         if (file is null)
         {
             throw new FileMetadataNotFoundException(fileId);

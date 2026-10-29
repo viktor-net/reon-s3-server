@@ -22,6 +22,10 @@ public interface IFileMetadataRepository
     /// <summary>File ids whose objects are allowed to exist (Pending or Ready).</summary>
     Task<IReadOnlyCollection<Guid>> GetActiveFileIdsAsync(CancellationToken cancellationToken);
 
+    Task<FileListResult> ListAsync(FileListQuery query, CancellationToken cancellationToken);
+
+    Task<StorageStats> GetStatsAsync(CancellationToken cancellationToken);
+
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
     void Remove(FileMetadata file);

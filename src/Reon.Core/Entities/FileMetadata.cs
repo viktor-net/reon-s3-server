@@ -150,4 +150,21 @@ public sealed class FileMetadata
         FailureReason = reason;
         UpdatedAt = now;
     }
+
+    public void UpdateMetadata(
+        string originalName,
+        string? description,
+        JsonDocument? tags,
+        DateTimeOffset now)
+    {
+        if (Status == FileStatus.Deleted)
+        {
+            throw new InvalidOperationException($"Cannot update deleted file {Id}.");
+        }
+
+        OriginalName = originalName;
+        Description = description;
+        Tags = tags;
+        UpdatedAt = now;
+    }
 }

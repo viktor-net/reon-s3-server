@@ -13,6 +13,18 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
                 StatusCodes.Status404NotFound,
                 "File not found",
                 "The requested file does not exist or was deleted."),
+            MultipartUploadNotFoundException => (
+                StatusCodes.Status404NotFound,
+                "Multipart upload not found",
+                "The requested multipart upload does not exist."),
+            MultipartUploadExpiredException => (
+                StatusCodes.Status410Gone,
+                "Multipart upload expired",
+                "The multipart upload expired and its parts were aborted."),
+            MultipartUploadNotActiveException => (
+                StatusCodes.Status409Conflict,
+                "Multipart upload is not active",
+                "The multipart upload is already completed, aborted or failed."),
             FileNotReadyException => (
                 StatusCodes.Status409Conflict,
                 "File is not ready",

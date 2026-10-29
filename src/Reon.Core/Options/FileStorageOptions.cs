@@ -16,6 +16,18 @@ public sealed class FileStorageOptions
     /// <summary>Part size for multipart uploads. S3 requires at least 5 MiB. Default: 16 MiB.</summary>
     public int MultipartPartSizeBytes { get; set; } = 16_777_216;
 
+    /// <summary>Minimum allowed part size except the last part. S3 requires 5 MiB.</summary>
+    public int MinMultipartPartSizeBytes { get; set; } = 5_242_880;
+
+    /// <summary>Maximum number of parts in one multipart upload.</summary>
+    public int MaxMultipartParts { get; set; } = 10_000;
+
+    /// <summary>How long an unfinished multipart upload is kept before cleanup. Default: 7 days.</summary>
+    public int MultipartUploadLifetimeDays { get; set; } = 7;
+
+    /// <summary>How often expired multipart uploads are aborted.</summary>
+    public int MultipartCleanupIntervalMinutes { get; set; } = 60;
+
     /// <summary>Every generated object key starts with this prefix.</summary>
     public string KeyPrefix { get; set; } = "files/";
 

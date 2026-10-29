@@ -12,6 +12,50 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
 {
     private const string FileIdExample = "019a7e4c-7f0e-7c3a-9a2b-5f5f9f9f9f9f";
 
+    private const string FileExampleJson = """
+        {
+          "fileId": "019a7e4c-7f0e-7c3a-9a2b-5f5f9f9f9f9f",
+          "originalName": "hello.txt",
+          "contentType": "text/plain",
+          "size": 13,
+          "sha256": "8f4c2b7e6d5a1c3b9e0f2a4d6c8b1e3f5a7c9d0e2b4f6a8c1d3e5f7a9b0c2d4e",
+          "eTag": "\"abc123\"",
+          "owner": "system",
+          "description": "пример",
+          "tags": { "kind": "demo" },
+          "status": "Ready",
+          "version": 1,
+          "failureReason": null,
+          "createdAt": "2026-10-29T09:00:00+00:00",
+          "completedAt": "2026-10-29T09:00:01+00:00",
+          "updatedAt": "2026-10-29T09:00:01+00:00"
+        }
+        """;
+
+    private const string UploadSessionExampleJson = """
+        {
+          "uploadId": "019a7e4c-7f0e-7c3a-9a2b-5f5f9f9f9f9f",
+          "fileId": "019a7e4c-0000-7000-8000-000000000001",
+          "status": "Initiated",
+          "partSize": 16777216,
+          "minPartSize": 5242880,
+          "maxParts": 10000,
+          "createdAt": "2026-10-29T09:00:00+00:00",
+          "expiresAt": "2026-11-05T09:00:00+00:00",
+          "completedAt": null,
+          "parts": []
+        }
+        """;
+
+    private const string PartExampleJson = """
+        {
+          "partNumber": 1,
+          "eTag": "\"part-etag\"",
+          "size": 16777216,
+          "uploadedAt": "2026-10-29T09:00:00+00:00"
+        }
+        """;
+
     public Task TransformAsync(
         OpenApiOperation operation,
         OpenApiOperationTransformerContext context,
@@ -44,6 +88,76 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
                  path.Equals("api/v1/files/{fileId}", StringComparison.OrdinalIgnoreCase))
         {
             TransformDelete(operation);
+        }
+        else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/files", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformList(operation);
+        }
+        else if (method.Equals("HEAD", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/files/{fileId}", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformHead(operation);
+        }
+        else if (method.Equals("PATCH", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/files/{fileId}/metadata", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUpdateMetadata(operation);
+        }
+        else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/files/{fileId}/copy", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformCopy(operation);
+        }
+        else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/files/bulk-delete", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformBulkDelete(operation);
+        }
+        else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformInitiateUpload(operation);
+        }
+        else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUploadList(operation);
+        }
+        else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads/{uploadId}", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUploadGet(operation);
+        }
+        else if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads/{uploadId}/parts/{partNumber}", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUploadPart(operation);
+        }
+        else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads/{uploadId}/complete", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUploadComplete(operation);
+        }
+        else if (method.Equals("DELETE", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads/{uploadId}", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUploadAbort(operation);
+        }
+        else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/uploads/{uploadId}/abort", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUploadAbort(operation);
+        }
+        else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/storage/stats", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformStorageStats(operation);
+        }
+        else if (method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/v1/storage/info", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformStorageInfo(operation);
         }
 
         return Task.CompletedTask;
@@ -143,6 +257,226 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
             "удаление идемпотентно: 204, 202 или 404.";
 
         SetParameterExample(operation, "fileId", FileIdExample);
+    }
+
+    private static void TransformList(OpenApiOperation operation)
+    {
+        operation.Summary = "Список файлов";
+        operation.Description =
+            "Возвращает страницу файлов с фильтрами по статусу, типу, имени и дате создания. " +
+            "Максимальный pageSize — 200.";
+        SetJsonExample(
+            operation,
+            "200",
+            """
+            {
+              "items": [
+                {
+                  "fileId": "019a7e4c-7f0e-7c3a-9a2b-5f5f9f9f9f9f",
+                  "originalName": "hello.txt",
+                  "contentType": "text/plain",
+                  "size": 13,
+                  "status": "Ready",
+                  "createdAt": "2026-10-29T09:00:00+00:00"
+                }
+              ],
+              "total": 1,
+              "page": 1,
+              "pageSize": 50
+            }
+            """);
+    }
+
+    private static void TransformHead(OpenApiOperation operation)
+    {
+        operation.Summary = "Заголовки файла";
+        operation.Description =
+            "Возвращает Content-Type, Content-Length и ETag без тела файла. " +
+            "Для файла не в статусе Ready — 409.";
+        SetParameterExample(operation, "fileId", FileIdExample);
+    }
+
+    private static void TransformUpdateMetadata(OpenApiOperation operation)
+    {
+        operation.Summary = "Изменить описание файла";
+        operation.Description =
+            "Меняет originalName, description и tags. null или отсутствующее поле " +
+            "оставляет значение без изменений; пустая строка очищает description, {} очищает tags.";
+        SetParameterExample(operation, "fileId", FileIdExample);
+        SetJsonRequestBodyExample(
+            operation,
+            """
+            {
+              "originalName": "renamed.txt",
+              "description": "новое описание",
+              "tags": { "kind": "demo" }
+            }
+            """);
+        SetJsonExample(operation, "200", FileExampleJson);
+    }
+
+    private static void TransformCopy(OpenApiOperation operation)
+    {
+        operation.Summary = "Скопировать файл";
+        operation.Description =
+            "Создаёт новый fileId и копирует объект в S3 и описание в PostgreSQL.";
+        SetParameterExample(operation, "fileId", FileIdExample);
+        SetJsonRequestBodyExample(
+            operation,
+            """
+            {
+              "originalName": "copy.txt",
+              "description": "копия",
+              "tags": { "kind": "copy" }
+            }
+            """);
+        SetJsonExample(operation, "201", FileExampleJson);
+    }
+
+    private static void TransformBulkDelete(OpenApiOperation operation)
+    {
+        operation.Summary = "Удалить несколько файлов";
+        operation.Description =
+            "Удаляет до 100 уникальных fileId. Возвращает результат по каждому файлу.";
+        SetJsonRequestBodyExample(
+            operation,
+            """
+            {
+              "fileIds": [
+                "019a7e4c-7f0e-7c3a-9a2b-5f5f9f9f9f9f"
+              ],
+              "continueOnError": true
+            }
+            """);
+        SetJsonExample(
+            operation,
+            "200",
+            """
+            {
+              "items": [
+                {
+                  "fileId": "019a7e4c-7f0e-7c3a-9a2b-5f5f9f9f9f9f",
+                  "status": "Deleted",
+                  "httpStatus": 204,
+                  "error": null
+                }
+              ]
+            }
+            """);
+    }
+
+    private static void TransformInitiateUpload(OpenApiOperation operation)
+    {
+        operation.Summary = "Начать multipart-загрузку";
+        operation.Description =
+            "Создаёт сессию загрузки. S3 upload id остаётся внутри сервиса; " +
+            "клиент использует uploadId, partSize и expiresAt.";
+        SetJsonRequestBodyExample(
+            operation,
+            """
+            {
+              "originalName": "big.bin",
+              "contentType": "application/octet-stream",
+              "description": "большой файл",
+              "tags": { "kind": "backup" }
+            }
+            """);
+        SetJsonExample(operation, "201", UploadSessionExampleJson);
+    }
+
+    private static void TransformUploadList(OpenApiOperation operation)
+    {
+        operation.Summary = "Активные multipart-загрузки";
+        operation.Description = "Список незавершённых сессий загрузки.";
+        SetJsonExample(
+            operation,
+            "200",
+            $"[{UploadSessionExampleJson}]");
+    }
+
+    private static void TransformUploadGet(OpenApiOperation operation)
+    {
+        operation.Summary = "Статус multipart-загрузки";
+        operation.Description = "Возвращает статус, срок жизни и уже загруженные части.";
+        SetParameterExample(operation, "uploadId", FileIdExample);
+        SetJsonExample(operation, "200", UploadSessionExampleJson);
+    }
+
+    private static void TransformUploadPart(OpenApiOperation operation)
+    {
+        operation.Summary = "Загрузить часть";
+        operation.Description =
+            "Тело запроса — бинарные данные части. Content-Length обязателен. " +
+            "Все части, кроме последней, должны быть не меньше 5 MiB.";
+        SetParameterExample(operation, "uploadId", FileIdExample);
+        SetParameterExample(operation, "partNumber", "1");
+        SetJsonExample(operation, "200", PartExampleJson);
+    }
+
+    private static void TransformUploadComplete(OpenApiOperation operation)
+    {
+        operation.Summary = "Завершить multipart-загрузку";
+        operation.Description =
+            "Собирает объект в S3, считает SHA-256 и создаёт описание файла в PostgreSQL.";
+        SetParameterExample(operation, "uploadId", FileIdExample);
+        SetJsonExample(operation, "201", FileExampleJson);
+    }
+
+    private static void TransformUploadAbort(OpenApiOperation operation)
+    {
+        operation.Summary = "Прервать multipart-загрузку";
+        operation.Description =
+            "Вызывает AbortMultipartUpload в S3. Повторный abort идемпотентен.";
+        SetParameterExample(operation, "uploadId", FileIdExample);
+    }
+
+    private static void TransformStorageStats(OpenApiOperation operation)
+    {
+        operation.Summary = "Статистика хранилища";
+        operation.Description = "Количество файлов и объём по статусам и типам.";
+        SetJsonExample(
+            operation,
+            "200",
+            """
+            {
+              "totalFiles": 10,
+              "totalBytes": 104857600,
+              "byStatus": { "Ready": 9, "Missing": 1 },
+              "bytesByContentType": { "image/png": 104857000, "text/plain": 600 }
+            }
+            """);
+    }
+
+    private static void TransformStorageInfo(OpenApiOperation operation)
+    {
+        operation.Summary = "Информация о хранилище";
+        operation.Description = "Бакет, лимиты и настройки multipart.";
+        SetJsonExample(
+            operation,
+            "200",
+            """
+            {
+              "bucket": "reon-files",
+              "keyPrefix": "files/",
+              "maxFileSizeBytes": 1073741824,
+              "multipartPartSizeBytes": 16777216,
+              "minMultipartPartSizeBytes": 5242880,
+              "maxMultipartParts": 10000,
+              "multipartUploadLifetimeDays": 7
+            }
+            """);
+    }
+
+    private static void SetJsonRequestBodyExample(
+        OpenApiOperation operation,
+        string json)
+    {
+        if (operation.RequestBody is { } requestBody &&
+            requestBody.Content is { } content &&
+            content.TryGetValue("application/json", out var mediaType))
+        {
+            mediaType.Example = JsonNode.Parse(json);
+        }
     }
 
     private static void SetParameterExample(

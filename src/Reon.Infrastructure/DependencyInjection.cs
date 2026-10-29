@@ -36,6 +36,8 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure(3)));
 
         services.AddScoped<IFileMetadataRepository, FileMetadataRepository>();
+        services.AddScoped<IMultipartUploadRepository, MultipartUploadRepository>();
+        services.AddScoped<IMultipartUploadService, MultipartUploadService>();
 
         services.AddSingleton<IAmazonS3>(serviceProvider =>
         {
@@ -64,6 +66,7 @@ public static class DependencyInjection
         services.AddHostedService<S3BucketInitializer>();
         services.AddHostedService<ReconciliationBackgroundService>();
         services.AddHostedService<OrphanSweepBackgroundService>();
+        services.AddHostedService<MultipartCleanupBackgroundService>();
 
         return services;
     }

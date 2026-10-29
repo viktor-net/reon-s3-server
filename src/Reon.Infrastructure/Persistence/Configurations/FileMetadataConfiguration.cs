@@ -110,6 +110,18 @@ public sealed class FileMetadataConfiguration : IEntityTypeConfiguration<FileMet
         builder.HasIndex(file => new { file.Status, file.UpdatedAt })
             .HasDatabaseName("ix_files_status_updated_at");
 
+        builder.HasIndex(file => new { file.Status, file.CreatedAt })
+            .HasDatabaseName("ix_files_status_created_at");
+
+        builder.HasIndex(file => file.ContentType)
+            .HasDatabaseName("ix_files_content_type");
+
+        builder.HasIndex(file => file.CreatedAt)
+            .HasDatabaseName("ix_files_created_at");
+
+        builder.HasIndex(file => file.OriginalName)
+            .HasDatabaseName("ix_files_original_name");
+
         builder.HasIndex(file => new { file.Status, file.DeletedAt })
             .HasDatabaseName("ix_files_status_deleted_at")
             .HasFilter("\"status\" = 'Deleted'");

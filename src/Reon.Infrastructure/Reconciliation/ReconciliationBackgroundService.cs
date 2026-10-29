@@ -38,7 +38,9 @@ public sealed partial class ReconciliationBackgroundService(
             await reconciliation.ReconcilePendingAsync(cancellationToken);
             await reconciliation.ReconcileDeletingAsync(cancellationToken);
             await reconciliation.PurgeDeletedAsync(cancellationToken);
-            await objectStorage.AbortIncompleteUploadsAsync(TimeSpan.FromHours(1), cancellationToken);
+            await objectStorage.AbortIncompleteUploadsAsync(
+                TimeSpan.FromDays(Math.Max(1, options.Value.MultipartUploadLifetimeDays)),
+                cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

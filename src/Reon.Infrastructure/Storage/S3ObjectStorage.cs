@@ -133,6 +133,156 @@ public sealed partial class S3ObjectStorage : IObjectStorage
         }
     }
 
+    public async Task<StoredObject> CopyAsync(
+        string sourceObjectKey,
+        string destinationObjectKey,
+        string contentType,
+        long contentLength,
+        IReadOnlyDictionary<string, string>? metadata,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new CopyObjectRequest
+            {
+                SourceBucket = _options.BucketName,
+                SourceKey = sourceObjectKey,
+                DestinationBucket = _options.BucketName,
+                DestinationKey = destinationObjectKey,
+                ContentType = contentType,
+                MetadataDirective = S3MetadataDirective.REPLACE,
+            };
+            AddMetadata(request.Metadata, metadata);
+
+            var response = await _s3.CopyObjectAsync(request, cancellationToken);
+            return new StoredObject(destinationObjectKey, response.ETag, contentLength, response.VersionId);
+        }
+        catch (AmazonS3Exception exception)
+        {
+            throw new ObjectStorageException(
+                $"S3 COPY failed for object '{sourceObjectKey}'.",
+                exception);
+        }
+    }
+
+    public async Task<StoredMultipartUpload> InitiateMultipartUploadAsync(
+        string objectKey,
+        string contentType,
+        IReadOnlyDictionary<string, string>? metadata,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new InitiateMultipartUploadRequest
+            {
+                BucketName = _options.BucketName,
+                Key = objectKey,
+                ContentType = contentType,
+            };
+            AddMetadata(request.Metadata, metadata);
+
+            var response = await _s3.InitiateMultipartUploadAsync(request, cancellationToken);
+            return new StoredMultipartUpload(objectKey, response.UploadId, DateTimeOffset.UtcNow);
+        }
+        catch (AmazonS3Exception exception)
+        {
+            throw new ObjectStorageException(
+                $"S3 multipart initiation failed for object '{objectKey}'.",
+                exception);
+        }
+    }
+
+    public async Task<StoredPart> UploadPartAsync(
+        string objectKey,
+        string storageUploadId,
+        int partNumber,
+        Stream content,
+        long contentLength,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _s3.UploadPartAsync(
+                new UploadPartRequest
+                {
+                    BucketName = _options.BucketName,
+                    Key = objectKey,
+                    UploadId = storageUploadId,
+                    PartNumber = partNumber,
+                    InputStream = content,
+                    PartSize = contentLength,
+                    UseChunkEncoding = false,
+                },
+                cancellationToken);
+
+            return new StoredPart(partNumber, response.ETag, contentLength);
+        }
+        catch (AmazonS3Exception exception)
+        {
+            throw new ObjectStorageException(
+                $"S3 multipart part upload failed for object '{objectKey}'.",
+                exception);
+        }
+    }
+
+    public async Task<StoredObject> CompleteMultipartUploadAsync(
+        string objectKey,
+        string storageUploadId,
+        IReadOnlyList<MultipartPartETag> parts,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _s3.CompleteMultipartUploadAsync(
+                new CompleteMultipartUploadRequest
+                {
+                    BucketName = _options.BucketName,
+                    Key = objectKey,
+                    UploadId = storageUploadId,
+                    PartETags = parts
+                        .Select(part => new PartETag(part.PartNumber, part.ETag))
+                        .ToList(),
+                },
+                cancellationToken);
+
+            return new StoredObject(objectKey, response.ETag, 0, response.VersionId);
+        }
+        catch (AmazonS3Exception exception)
+        {
+            throw new ObjectStorageException(
+                $"S3 multipart completion failed for object '{objectKey}'.",
+                exception);
+        }
+    }
+
+    public async Task AbortMultipartUploadAsync(
+        string objectKey,
+        string storageUploadId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _s3.AbortMultipartUploadAsync(
+                new AbortMultipartUploadRequest
+                {
+                    BucketName = _options.BucketName,
+                    Key = objectKey,
+                    UploadId = storageUploadId,
+                },
+                cancellationToken);
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Idempotent abort.
+        }
+        catch (AmazonS3Exception exception)
+        {
+            throw new ObjectStorageException(
+                $"S3 multipart abort failed for object '{objectKey}'.",
+                exception);
+        }
+    }
+
     public async IAsyncEnumerable<ObjectInfo> ListAsync(
         string prefix,
         [EnumeratorCancellation] CancellationToken cancellationToken)
