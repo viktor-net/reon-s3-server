@@ -36,12 +36,12 @@ public sealed record ObjectInfo(
     string? ContentType = null);
 
 /// <summary>
-/// Abstraction over the object store. Implementations must not leak
-/// provider-specific types (AWS SDK, Swift, etc.) into the rest of the app.
+/// Абстракция над объектным хранилищем. Реализации не должны протаскивать
+/// типы провайдера (AWS SDK, Swift и т.п.) в остальное приложение.
 /// </summary>
 public interface IObjectStorage
 {
-    /// <summary>Logical bucket/container that stores the objects.</summary>
+    /// <summary>Логический бакет/контейнер, в котором хранятся объекты.</summary>
     string BucketName { get; }
 
     Task<StoredObject> PutAsync(
@@ -82,20 +82,20 @@ public interface IObjectStorage
         string storageUploadId,
         CancellationToken cancellationToken);
 
-    /// <summary>Returns null when the object does not exist.</summary>
+    /// <summary>Возвращает null, если объекта нет.</summary>
     Task<ObjectInfo?> HeadAsync(string objectKey, CancellationToken cancellationToken);
 
-    /// <summary>Returns null when the object does not exist.</summary>
+    /// <summary>Возвращает null, если объекта нет.</summary>
     Task<Stream?> OpenReadAsync(string objectKey, CancellationToken cancellationToken);
 
-    /// <summary>Idempotent: deleting a missing object is not an error.</summary>
+    /// <summary>Идемпотентно: удаление отсутствующего объекта не считается ошибкой.</summary>
     Task DeleteAsync(string objectKey, CancellationToken cancellationToken);
 
     IAsyncEnumerable<ObjectInfo> ListAsync(string prefix, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Best-effort cleanup for multipart uploads that were never completed.
-    /// Implementations that cannot enumerate them should log and return.
+    /// Best-effort очистка multipart-загрузок, которые так и не завершились.
+    /// Реализации, которые не умеют их перечислять, должны залогировать это и вернуть управление.
     /// </summary>
     Task AbortIncompleteUploadsAsync(TimeSpan olderThan, CancellationToken cancellationToken);
 }

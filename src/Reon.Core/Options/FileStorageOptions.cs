@@ -4,50 +4,50 @@ public sealed class FileStorageOptions
 {
     public const string SectionName = "FileStorage";
 
-    /// <summary>Owner value stored for files while client authentication is disabled.</summary>
+    /// <summary>Значение владельца для файлов, пока клиентская аутентификация отключена.</summary>
     public string DefaultOwner { get; set; } = "system";
 
-    /// <summary>Maximum size of a single uploaded file. Default: 1 GiB.</summary>
+    /// <summary>Максимальный размер одного загружаемого файла. По умолчанию: 1 ГиБ.</summary>
     public long MaxFileSizeBytes { get; set; } = 1_073_741_824;
 
-    /// <summary>Files larger than this are uploaded with S3 multipart. Default: 64 MiB.</summary>
+    /// <summary>Файлы больше этого размера загружаются через S3 multipart. По умолчанию: 64 МиБ.</summary>
     public long MultipartThresholdBytes { get; set; } = 67_108_864;
 
-    /// <summary>Part size for multipart uploads. S3 requires at least 5 MiB. Default: 16 MiB.</summary>
+    /// <summary>Размер части multipart-загрузки. S3 требует не меньше 5 МиБ. По умолчанию: 16 МиБ.</summary>
     public int MultipartPartSizeBytes { get; set; } = 16_777_216;
 
-    /// <summary>Minimum allowed part size except the last part. S3 requires 5 MiB.</summary>
+    /// <summary>Минимальный размер части, кроме последней. S3 требует 5 МиБ.</summary>
     public int MinMultipartPartSizeBytes { get; set; } = 5_242_880;
 
-    /// <summary>Maximum number of parts in one multipart upload.</summary>
+    /// <summary>Максимальное число частей в одной multipart-загрузке.</summary>
     public int MaxMultipartParts { get; set; } = 10_000;
 
-    /// <summary>How long an unfinished multipart upload is kept before cleanup. Default: 7 days.</summary>
+    /// <summary>Сколько хранится незавершённая multipart-загрузка до очистки. По умолчанию: 7 дней.</summary>
     public int MultipartUploadLifetimeDays { get; set; } = 7;
 
-    /// <summary>How often expired multipart uploads are aborted.</summary>
+    /// <summary>Как часто прерываются просроченные multipart-загрузки.</summary>
     public int MultipartCleanupIntervalMinutes { get; set; } = 60;
 
-    /// <summary>Every generated object key starts with this prefix.</summary>
+    /// <summary>Каждый сгенерированный ключ объекта начинается с этого префикса.</summary>
     public string KeyPrefix { get; set; } = "files/";
 
-    /// <summary>A Pending row older than this is checked against S3 by reconciliation.</summary>
+    /// <summary>Строка Pending старше этого возраста проверяется сверкой по S3.</summary>
     public int PendingTimeoutMinutes { get; set; } = 60;
 
-    /// <summary>How often a Deleting row is retried.</summary>
+    /// <summary>Как часто повторяется попытка удаления для строки Deleting.</summary>
     public int DeletingRetryMinutes { get; set; } = 5;
 
-    /// <summary>Background reconciliation interval.</summary>
+    /// <summary>Интервал фоновой сверки.</summary>
     public int ReconciliationIntervalMinutes { get; set; } = 5;
 
     public bool OrphanSweepEnabled { get; set; } = true;
 
     public int OrphanSweepIntervalMinutes { get; set; } = 360;
 
-    /// <summary>An object with no metadata row must be older than this before it is removed.</summary>
+    /// <summary>Объект без строки метаданных удаляется, только если он старше этого периода.</summary>
     public int OrphanGracePeriodHours { get; set; } = 24;
 
-    /// <summary>Soft-deleted rows are purged after this many days. 0 keeps them forever.</summary>
+    /// <summary>Мягко удалённые строки очищаются через столько дней. 0 — хранить вечно.</summary>
     public int DeletedRetentionDays { get; set; } = 30;
 
     public int MaxTags { get; set; } = 50;

@@ -19,7 +19,7 @@ public interface IFileMetadataRepository
         int limit,
         CancellationToken cancellationToken);
 
-    /// <summary>File ids whose objects are allowed to exist (Pending or Ready).</summary>
+    /// <summary>Идентификаторы файлов, объекты которых могут существовать (Pending или Ready).</summary>
     Task<IReadOnlyCollection<Guid>> GetActiveFileIdsAsync(CancellationToken cancellationToken);
 
     Task<FileListResult> ListAsync(FileListQuery query, CancellationToken cancellationToken);

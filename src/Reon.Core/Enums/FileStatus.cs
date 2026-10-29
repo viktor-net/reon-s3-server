@@ -1,8 +1,8 @@
 namespace Reon.Core.Enums;
 
 /// <summary>
-/// Lifecycle of a stored file. The enum is persisted as a string so that
-/// the database stays readable and new states can be added without renumbering.
+/// Жизненный цикл сохранённого файла. Перечисление хранится строкой, чтобы
+/// база оставалась читаемой, а новые состояния не требовали перенумерации.
 /// </summary>
 public enum FileStatus
 {

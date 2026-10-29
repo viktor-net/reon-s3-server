@@ -1,14 +1,14 @@
 namespace Reon.Core.Entities;
 
 /// <summary>
-/// Metadata for one file. The entity owns the lifecycle rules; the API and
-/// persistence layers only call the transition methods.
+/// Метаданные одного файла. Сущность владеет правилами жизненного цикла;
+/// API и слой хранения только вызывают методы переходов.
 /// </summary>
 public sealed class FileMetadata
 {
     private FileMetadata()
     {
-        // Required by EF Core.
+        // Требуется для EF Core.
     }
 
     public Guid Id { get; private set; }

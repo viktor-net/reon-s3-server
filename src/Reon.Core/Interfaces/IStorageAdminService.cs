@@ -72,8 +72,8 @@ public interface IStorageAdminService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Uploads several objects as one logical operation: when any entry fails,
-    /// the objects already written by this call are removed again.
+    /// Загружает несколько объектов как одну логическую операцию: если какая-то
+    /// запись не удалась, уже записанные этой операцией объекты удаляются.
     /// </summary>
     Task<IReadOnlyList<ObjectInfo>> UploadBatchAsync(
         string bucket,

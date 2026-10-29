@@ -3,14 +3,14 @@ using Reon.Core.Enums;
 namespace Reon.Core.Entities;
 
 /// <summary>
-/// One administrative or storage operation recorded by the service. The audit
-/// log is append-only from the application's point of view.
+/// Одна административная операция или операция с хранилищем, записанная
+/// сервисом. Журнал ведётся только на добавление: записи не изменяются.
 /// </summary>
 public sealed class AuditEntry
 {
     private AuditEntry()
     {
-        // Required by EF Core.
+        // Требуется для EF Core.
     }
 
     public Guid Id { get; private set; }
@@ -19,10 +19,10 @@ public sealed class AuditEntry
 
     public string Actor { get; private set; } = string.Empty;
 
-    /// <summary>Stable machine-readable action name, e.g. "object.upload".</summary>
+    /// <summary>Стабильное машинное имя действия, например "object.upload".</summary>
     public string Action { get; private set; } = string.Empty;
 
-    /// <summary>Affected resource: bucket name or "bucket/key".</summary>
+    /// <summary>Затронутый ресурс: имя бакета или "bucket/key".</summary>
     public string Resource { get; private set; } = string.Empty;
 
     public AuditResult Result { get; private set; }

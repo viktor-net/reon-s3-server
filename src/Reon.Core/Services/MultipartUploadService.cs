@@ -4,8 +4,8 @@ using System.Security.Cryptography;
 namespace Reon.Core.Services;
 
 /// <summary>
-/// Explicit multipart upload sessions. The S3 upload id and S3 protocol stay
-/// inside the infrastructure layer; clients only see our uploadId.
+/// Явные сессии multipart-загрузки. Идентификатор загрузки S3 и протокол S3
+/// остаются внутри инфраструктурного слоя; клиенты видят только наш uploadId.
 /// </summary>
 public sealed partial class MultipartUploadService : IMultipartUploadService
 {

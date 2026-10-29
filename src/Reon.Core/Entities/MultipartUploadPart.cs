@@ -4,7 +4,7 @@ public sealed class MultipartUploadPart
 {
     private MultipartUploadPart()
     {
-        // Required by EF Core.
+        // Требуется для EF Core.
     }
 
     public Guid UploadId { get; private set; }

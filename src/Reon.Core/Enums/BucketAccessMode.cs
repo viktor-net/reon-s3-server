@@ -1,8 +1,8 @@
 namespace Reon.Core.Enums;
 
 /// <summary>
-/// Anonymous access mode for a bucket. Authorized access is governed by IAM
-/// policies outside this service; this setting only controls anonymous reads.
+/// Режим анонимного доступа к бакету. Авторизованный доступ регулируется
+/// IAM-политиками вне этого сервиса; настройка управляет только анонимным чтением.
 /// </summary>
 public enum BucketAccessMode
 {

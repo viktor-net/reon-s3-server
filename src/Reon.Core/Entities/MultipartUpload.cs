@@ -6,14 +6,14 @@ public sealed class MultipartUpload
 {
     private MultipartUpload()
     {
-        // Required by EF Core.
+        // Требуется для EF Core.
     }
 
     public Guid Id { get; private set; }
 
     public Guid FileId { get; private set; }
 
-    /// <summary>Opaque S3 multipart upload id. Never exposed to clients.</summary>
+    /// <summary>Непрозрачный идентификатор multipart-загрузки S3. Клиентам не показывается.</summary>
     public string StorageUploadId { get; private set; } = string.Empty;
 
     public string Bucket { get; private set; } = string.Empty;

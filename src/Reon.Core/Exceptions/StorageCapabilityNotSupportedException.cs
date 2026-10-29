@@ -1,8 +1,8 @@
 namespace Reon.Core.Exceptions;
 
 /// <summary>
-/// Raised when the underlying S3-compatible provider does not implement an
-/// administrative capability (for example bucket policy on Swift s3api).
+/// Возникает, когда S3-совместимый провайдер не реализует
+/// административную возможность (например, bucket policy в Swift s3api).
 /// </summary>
 public sealed class StorageCapabilityNotSupportedException : Exception
 {

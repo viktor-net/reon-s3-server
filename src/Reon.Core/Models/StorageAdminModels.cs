@@ -26,7 +26,7 @@ public sealed record BucketAccess(
     BucketAccessMode Mode,
     string Policy);
 
-/// <summary>Raw object listing page: prefixes (folders) and objects.</summary>
+/// <summary>Страница листинга объектов: префиксы («папки») и объекты.</summary>
 public sealed record ObjectListing(
     IReadOnlyList<string> Prefixes,
     IReadOnlyList<ObjectInfo> Objects,
@@ -131,8 +131,8 @@ public sealed record UploadObjectCommand(
     IReadOnlyDictionary<string, string>? Tags = null);
 
 /// <summary>
-/// One file of a batch upload. The stream factory keeps the facade free of
-/// ASP.NET types: the API layer opens the form file on demand.
+/// Один файл пакетной загрузки. Фабрика потоков изолирует фасад от
+/// типов ASP.NET: API-слой открывает файл формы по требованию.
 /// </summary>
 public sealed record BatchUploadEntry(
     string Key,
@@ -161,7 +161,7 @@ public sealed record AuditPage(
     int Page,
     int PageSize);
 
-/// <summary>Envelope pushed to administrative WebSocket subscribers.</summary>
+/// <summary>Конверт, который получают подписчики административного WebSocket.</summary>
 public sealed record StorageEvent(
     string Type,
     DateTimeOffset OccurredAt,

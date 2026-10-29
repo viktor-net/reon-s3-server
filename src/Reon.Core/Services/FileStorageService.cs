@@ -1,9 +1,9 @@
 namespace Reon.Core.Services;
 
 /// <summary>
-/// Application service for the File Storage API. It owns the upload/read/delete
-/// saga and the metadata lifecycle. Infrastructure details stay behind
-/// <see cref="IObjectStorage"/> and <see cref="IFileMetadataRepository"/>.
+/// Прикладной сервис API файлового хранилища. Он владеет сагой загрузки,
+/// чтения и удаления, а также жизненным циклом метаданных. Детали
+/// инфраструктуры остаются за <see cref="IObjectStorage"/> и <see cref="IFileMetadataRepository"/>.
 /// </summary>
 public sealed partial class FileStorageService
 {
@@ -49,12 +49,12 @@ public sealed partial class FileStorageService
         var fileId = Guid.CreateVersion7();
         var objectKey = $"{_options.KeyPrefix}{fileId:N}{GetSafeExtension(originalName)}";
 
-        // Spooling gives us a seekable stream (S3 retries and multipart need it),
-        // a known size, and a checksum before any metadata becomes visible.
+        // Буферизация даёт поток с произвольным доступом (нужен для повторов S3
+        // и multipart), известный размер и контрольную сумму до появления метаданных.
         await using var tempFile = await _tempFiles.CreateAsync(content, _options.MaxFileSizeBytes, cancellationToken);
 
-        // Quota is checked before the metadata row appears, so a rejected
-        // upload leaves nothing behind.
+        // Квота проверяется до появления строки метаданных, поэтому отклонённая
+        // загрузка ничего не оставляет после себя.
         await _quotaGuard.EnsureCanWriteAsync(_objectStorage.BucketName, tempFile.Size, cancellationToken);
 
         var now = _clock.UtcNow;
@@ -108,8 +108,8 @@ public sealed partial class FileStorageService
         }
         catch (Exception)
         {
-            // The object may already exist. Best-effort remove it so a failed
-            // request does not leave an untracked object behind.
+            // Объект мог уже существовать. Пытаемся удалить его, чтобы неудачный
+            // запрос не оставил объект без учёта.
             try
             {
                 await _objectStorage.DeleteAsync(objectKey, CancellationToken.None);
@@ -300,7 +300,7 @@ public sealed partial class FileStorageService
 
         try
         {
-            // Idempotent by contract: a missing object is not an error.
+            // По контракту идемпотентно: отсутствующий объект не считается ошибкой.
             await _objectStorage.DeleteAsync(file.ObjectKey, cancellationToken);
 
             file.MarkDeleted(_clock.UtcNow);
@@ -311,7 +311,7 @@ public sealed partial class FileStorageService
         }
         catch (ObjectStorageException exception)
         {
-            // The row stays in Deleting and the reconciliation worker retries.
+            // Строка остаётся в Deleting, и фоновая сверка повторит попытку.
             LogDeleteFailed(_logger, exception, fileId);
             throw;
         }

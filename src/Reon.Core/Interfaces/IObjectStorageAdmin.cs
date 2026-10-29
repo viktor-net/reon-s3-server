@@ -1,9 +1,9 @@
 namespace Reon.Core.Interfaces;
 
 /// <summary>
-/// Administrative operations over the object store that span multiple buckets.
-/// The file API deliberately stays on a single default bucket; this interface
-/// is only used by the administrative contour.
+/// Административные операции над объектным хранилищем по всем бакетам.
+/// Файловый API намеренно работает с одним бакетом по умолчанию; этот
+/// интерфейс используется только административным контуром.
 /// </summary>
 public interface IObjectStorageAdmin
 {
@@ -17,7 +17,7 @@ public interface IObjectStorageAdmin
         bool objectLockEnabled,
         CancellationToken cancellationToken);
 
-    /// <summary>Deletes a bucket. Used for rollback and administrative cleanup.</summary>
+    /// <summary>Удаляет бакет. Используется для отката и административной очистки.</summary>
     Task DeleteBucketAsync(string bucket, CancellationToken cancellationToken);
 
     Task<BucketVersioning> GetVersioningAsync(string bucket, CancellationToken cancellationToken);
@@ -96,6 +96,6 @@ public interface IObjectStorageAdmin
         string? versionId,
         DateTimeOffset expiresAt);
 
-    /// <summary>Recomputes usage from the object store, with a short-lived cache.</summary>
+    /// <summary>Пересчитывает использование из объектного хранилища с коротким кешем.</summary>
     Task<BucketUsageStats> GetUsageAsync(string bucket, bool refresh, CancellationToken cancellationToken);
 }

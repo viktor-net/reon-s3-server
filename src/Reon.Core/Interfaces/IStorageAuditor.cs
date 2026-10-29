@@ -1,8 +1,8 @@
 namespace Reon.Core.Interfaces;
 
 /// <summary>
-/// Append-only audit trail shared by the file API and the admin facade.
-/// Recording never throws: auditing must not mask the result of an operation.
+/// Журнал только на добавление, общий для файлового API и административного фасада.
+/// Запись никогда не бросает исключение: аудит не должен подменять результат операции.
 /// </summary>
 public interface IStorageAuditor
 {

@@ -3,8 +3,8 @@ namespace Reon.Core.Interfaces;
 public interface ITempFileFactory
 {
     /// <summary>
-    /// Copies the source stream to a temporary file, enforces the size limit
-    /// and computes SHA-256. The returned file must be disposed by the caller.
+    /// Копирует исходный поток во временный файл, проверяет лимит размера
+    /// и считает SHA-256. Полученный файл должен освободить вызывающий код.
     /// </summary>
     Task<TempFile> CreateAsync(Stream source, long maxBytes, CancellationToken cancellationToken);
 }
@@ -52,7 +52,7 @@ public sealed class TempFile : IAsyncDisposable
         }
         catch (IOException)
         {
-            // Best-effort cleanup. A leftover temp file is not a correctness issue.
+            // Best-effort очистка. Оставшийся временный файл не влияет на корректность.
         }
 
         return ValueTask.CompletedTask;

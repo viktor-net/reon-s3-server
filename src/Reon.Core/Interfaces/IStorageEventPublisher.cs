@@ -1,8 +1,8 @@
 namespace Reon.Core.Interfaces;
 
 /// <summary>
-/// Transport-agnostic publisher for administrative real-time events.
-/// The API layer implements it on top of WebSockets.
+/// Публикатор административных событий реального времени, не зависящий от транспорта.
+/// API-слой реализует его поверх WebSocket.
 /// </summary>
 public interface IStorageEventPublisher
 {

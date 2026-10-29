@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 namespace Reon.Core.Services;
 
 /// <summary>
-/// Administrative use cases for the object storage: buckets, raw objects,
-/// quotas, access, lifecycle and the audit trail. The service owns validation
-/// and auditing; provider specifics stay behind <see cref="IObjectStorageAdmin"/>.
+/// Административные сценарии объектного хранилища: бакеты, сырые объекты,
+/// квоты, доступ, lifecycle и журнал операций. Сервис отвечает за валидацию
+/// и аудит; особенности провайдера остаются за <see cref="IObjectStorageAdmin"/>.
 /// </summary>
 public sealed partial class StorageAdminService : IStorageAdminService
 {
@@ -576,8 +576,8 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 catch (Exception exception) when (
                     exception is StorageCapabilityNotSupportedException or ObjectStorageException)
                 {
-                    // Do not leave an object behind when the caller's tag set
-                    // cannot be applied: the request is reported as failed.
+                    // Не оставлять объект, если набор тегов вызывающего
+                    // применить не удалось: запрос считается неуспешным.
                     await TryDeleteUploadedObjectAsync(command.Bucket, command.Key, cancellationToken);
                     throw;
                 }
@@ -646,8 +646,8 @@ public sealed partial class StorageAdminService : IStorageAdminService
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // The batch is one logical operation: undo the objects this call
-            // has already written before reporting the failure.
+            // Батч — одна логическая операция: откатываем уже записанные
+            // этим вызовом объекты перед тем, как сообщить об ошибке.
             foreach (var key in uploadedKeys)
             {
                 try

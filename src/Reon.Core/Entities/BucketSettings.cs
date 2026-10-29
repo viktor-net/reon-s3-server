@@ -3,21 +3,21 @@ using Reon.Core.Enums;
 namespace Reon.Core.Entities;
 
 /// <summary>
-/// Administrative settings owned by this service for a storage bucket.
-/// The bucket itself lives in the object store; only settings that the S3 API
-/// cannot represent in a portable way (quota, anonymous access mode) are kept
-/// here. Versioning, lifecycle and security are read from the object store.
+/// Административные настройки бакета, которыми владеет этот сервис.
+/// Сам бакет живёт в объектном хранилище; здесь хранятся только настройки,
+/// которые S3 API не может переносимо представить: квота и режим анонимного
+/// доступа. Версионирование, lifecycle и безопасность читаются из хранилища.
 /// </summary>
 public sealed class BucketSettings
 {
     private BucketSettings()
     {
-        // Required by EF Core.
+        // Требуется для EF Core.
     }
 
     public string Bucket { get; private set; } = string.Empty;
 
-    /// <summary>Best-effort quota in bytes. Null means no quota.</summary>
+    /// <summary>Квота в байтах (best-effort). Null означает отсутствие квоты.</summary>
     public long? QuotaBytes { get; private set; }
 
     public BucketAccessMode AccessMode { get; private set; }
