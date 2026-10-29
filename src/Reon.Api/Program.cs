@@ -90,8 +90,17 @@ app.MapScalarApiReference(options =>
         // Share, Deploy, Generate SDK).
         .HideDeveloperTools()
         // Штатной опции для подписи "Powered by Scalar" нет — гасим её CSS.
-        .WithCustomCss("a[href*=\"utm_source=powered-by\"]{display:none!important}");
+        .WithCustomCss("a[href*=\"utm_source=powered-by\"]{display:none!important}")
+        // Обёртка Scalar для .NET 2.18.3 не отдаёт defaultOpenFirstTag,
+        // поэтому настройка приходит из отдельного JS-модуля. Путь
+        // относительный, чтобы работало и при размещении под PathBase.
+        .WithJavaScriptConfiguration("scalar/admin-config.js");
 });
+
+// Не раскрывать первый тег при открытии: в сайдбаре всё должно быть свёрнуто.
+app.MapGet("/scalar/admin-config.js", () =>
+        Results.Text("export default { defaultOpenFirstTag: false };", "text/javascript"))
+    .ExcludeFromDescription();
 
 // Scalar resolves its OpenAPI source relative to the UI URL. Keep aliases for
 // both /scalar/v1 and /scalar/v1/ so the UI can load /openapi/v1.json.
