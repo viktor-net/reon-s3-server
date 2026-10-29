@@ -44,7 +44,7 @@ public sealed partial class FileStorageService
         var tags = NormalizeTags(command.Tags);
 
         var fileId = Guid.CreateVersion7();
-        var objectKey = $"{_options.KeyPrefix}{fileId:N}";
+        var objectKey = $"{_options.KeyPrefix}{fileId:N}{GetSafeExtension(originalName)}";
 
         // Spooling gives us a seekable stream (S3 retries and multipart need it),
         // a known size, and a checksum before any metadata becomes visible.
@@ -201,6 +201,18 @@ public sealed partial class FileStorageService
         }
 
         return file;
+    }
+
+    private static string GetSafeExtension(string originalName)
+    {
+        var extension = Path.GetExtension(originalName);
+        if (string.IsNullOrWhiteSpace(extension) || extension.Length > 16)
+        {
+            return string.Empty;
+        }
+
+        var candidate = extension.ToLowerInvariant();
+        return candidate[1..].All(char.IsLetterOrDigit) ? candidate : string.Empty;
     }
 
     private string NormalizeOriginalName(string? value)

@@ -46,6 +46,7 @@ public sealed class FileStorageServiceTests
         Assert.Equal(content.Length, file.Size);
         Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content)).ToLowerInvariant(), file.Sha256);
         Assert.Equal("system", file.Owner);
+        Assert.EndsWith(".txt", file.ObjectKey, StringComparison.OrdinalIgnoreCase);
         Assert.True(_storage.Objects.ContainsKey(file.ObjectKey));
         Assert.Single(_repository.Files);
     }

@@ -270,7 +270,13 @@ public sealed partial class ReconciliationService : IReconciliationService
         }
 
         var name = objectKey[_options.KeyPrefix.Length..];
-        return Guid.TryParseExact(name, "N", out var id) ? id : null;
+        if (name.Length < 32 ||
+            (name.Length > 32 && name[32] != '.'))
+        {
+            return null;
+        }
+
+        return Guid.TryParseExact(name[..32], "N", out var id) ? id : null;
     }
 
     private async Task<IAsyncDisposable?> TryAcquireLockAsync(CancellationToken cancellationToken)
