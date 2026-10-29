@@ -59,6 +59,7 @@ builder.Services.AddOpenApi("api", options =>
     options.AddDocumentTransformer<OpenApiTagDescriptionsTransformer>();
     options.AddDocumentTransformer<OpenApiQueryOperationTransformer>();
     options.AddOperationTransformer<OpenApiExamplesOperationTransformer>();
+    options.AddOperationTransformer<OpenApiParameterExamplesTransformer>();
     options.AddOperationTransformer<OpenApiTextTransformer>();
 });
 builder.Services.AddInfrastructure(builder.Configuration);

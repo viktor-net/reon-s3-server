@@ -55,8 +55,7 @@ public sealed class OpenApiQueryOperationTransformer : IOpenApiDocumentTransform
             Summary = "Подписанная ссылка",
             Description =
                 "Создаёт временную подписанную ссылку на прямое скачивание. " +
-                "Это безопасный запрос: объект не меняется, поэтому используется " +
-                "метод QUERY (RFC 10008), а срок жизни передаётся телом.",
+                "Запрос не меняет состояние сервера, срок жизни передаётся телом – QUERY запрос.",
             Tags = new HashSet<OpenApiTagReference> { new("AdminObjects", document, null) },
             Parameters = [],
             Responses = new OpenApiResponses(),
@@ -135,6 +134,9 @@ public sealed class OpenApiQueryOperationTransformer : IOpenApiDocumentTransform
 
             operation.Responses![response.StatusCode.ToString(CultureInfo.InvariantCulture)] = openApiResponse;
         }
+
+        OpenApiParameterExamples.Apply(operation);
+        OpenApiTextTransformer.ApplyResponseDescriptions(operation);
 
         concretePath.AddOperation(HttpMethod.Query, operation);
     }

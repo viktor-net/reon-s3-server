@@ -311,7 +311,7 @@ public sealed class AdminObjectsController(
     }
 
     /// <summary>Подписанная ссылка</summary>
-    /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание. Это безопасный запрос: объект не меняется, поэтому используется метод QUERY (RFC 10008), а срок жизни передаётся телом.</remarks>
+    /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание. Запрос не меняет состояние сервера, срок жизни передаётся телом – QUERY запрос.</remarks>
     [HttpQuery("{key}/presigned-urls")]
     [ProducesResponseType<PresignedUrlResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]

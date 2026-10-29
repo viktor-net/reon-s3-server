@@ -41,19 +41,30 @@ public sealed partial class OpenApiTextTransformer : IOpenApiOperationTransforme
         operation.Summary = Collapse(operation.Summary);
         operation.Description = Collapse(operation.Description);
 
-        if (operation.Responses is not null)
-        {
-            foreach (var (status, response) in operation.Responses)
-            {
-                if (int.TryParse(status, out var code) &&
-                    ResponseDescriptions.TryGetValue(code, out var description))
-                {
-                    response.Description = description;
-                }
-            }
-        }
+        ApplyResponseDescriptions(operation);
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Заменяет стандартные английские описания HTTP-ответов на русские.
+    /// Используется и для операций, собранных вручную (QUERY).
+    /// </summary>
+    internal static void ApplyResponseDescriptions(OpenApiOperation operation)
+    {
+        if (operation.Responses is null)
+        {
+            return;
+        }
+
+        foreach (var (status, response) in operation.Responses)
+        {
+            if (int.TryParse(status, out var code) &&
+                ResponseDescriptions.TryGetValue(code, out var description))
+            {
+                response.Description = description;
+            }
+        }
     }
 
     private static string? Collapse(string? value)
