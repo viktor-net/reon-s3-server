@@ -3,7 +3,7 @@
 Сервис хранения файлов для внутренних модулей. Это единственный владелец
 информации о файлах: описания и жизненный цикл ведутся в PostgreSQL, содержимое
 лежит в S3. Остальные модули работают через JSON и бинарный поток и не знают
-деталей S3: ни XML, ни подписи запросов, ни multipart upload.
+деталей S3: ни XML, ни подписи запросов, ни параллельной загрузки файла по частям.
 
 ## Место сервиса в архитектуре
 
@@ -26,7 +26,7 @@
   внутреннего устройства сервиса.
 - **Повторное использование** — один и тот же сервис используют все модули,
   каждому не нужно заново реализовывать загрузку, удаление и учёт файлов.
-- **Абстрагирование** — наружу виден контракт; S3, multipart и служебные детали
+- **Абстрагирование** — наружу виден контракт; S3, параллельная загрузка файла по частям и служебные детали
   скрыты внутри.
 - **Автономность** — сервис сам управляет своим состоянием, статусами и
   восстановлением после сбоев.
@@ -46,13 +46,13 @@
 - Список файлов с фильтрами, сортировкой и страницами.
 - Изменение имени, описания и тегов без перезагрузки файла.
 - Копирование файла и массовое удаление.
-- Явные multipart-сессии: начать, загрузить части, завершить, прервать, посмотреть статус.
+- Явные сессии параллельной загрузки файла по частям: начать, загрузить части, завершить, прервать, посмотреть статус.
 - Статистика и информация о хранилище.
 - Административный фасад `/api/admin`: обзор, бакеты, объекты, версии,
   квоты, lifecycle, анонимный доступ и журнал операций.
 - WebSocket-поток административных событий.
 - OpenAPI + Scalar UI с примерами.
-- Фоновая сверка Postgres и S3, очистка orphan-объектов и зависших multipart upload.
+- Фоновая сверка Postgres и S3, очистка orphan-объектов и зависших сессий параллельной загрузки файла по частям.
 - Health checks `/health/live` и `/health/ready`.
 
 ## Реестр эндпоинтов
@@ -70,8 +70,8 @@
 | `DELETE` | `/api/files/{fileId}` | Удалить файл |
 | `POST` | `/api/files/{fileId}/copy` | Скопировать файл |
 | `POST` | `/api/files/bulk-delete` | Удалить несколько файлов |
-| `POST` | `/api/uploads` | Начать multipart-загрузку |
-| `GET` | `/api/uploads` | Список активных multipart-загрузок |
+| `POST` | `/api/uploads` | Начать параллельную загрузку файла по частям |
+| `GET` | `/api/uploads` | Список активных параллельных загрузок файла по частям |
 | `GET` | `/api/uploads/{uploadId}` | Статус загрузки и список частей |
 | `PUT` | `/api/uploads/{uploadId}/parts/{partNumber}` | Загрузить часть |
 | `POST` | `/api/uploads/{uploadId}/complete` | Завершить загрузку и создать файл |
@@ -103,7 +103,7 @@
 ### Чем фасад отличается от базового API
 
 Базовый API — это файловый домен: единица работы `fileId`, метаданные в
-Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и multipart-сессии.
+Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и сессии параллельной загрузки файла по частям.
 Фасад — это домен хранилища: бакеты, сырые ключи, версии и настройки S3.
 
 | Задача | Базовый API | Фасад |
@@ -112,7 +112,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | Единица работы | файл с описанием и жизненным циклом | объект S3, в том числе не учтённый в Postgres |
 | Бакеты | один (`S3:BucketName`) | все бакеты, создание и настройки |
 | Список | строки `files` с фильтрами и страницами | объекты и префиксы в S3 |
-| Загрузка | `Pending → Ready`, SHA-256, multipart, запись в БД | запись объекта по произвольному ключу |
+| Загрузка | `Pending → Ready`, SHA-256, параллельная загрузка файла по частям, запись в БД | запись объекта по произвольному ключу |
 | Удаление | статусная машина + фоновая сверка | немедленное удаление объекта или версии |
 | Специфика | — | квоты, usage, access, lifecycle, presigned URL, аудит, WS |
 
@@ -192,7 +192,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 `POST .../usage/refresh`) пересчитывает значение принудительно.
 
 Квота хранится в Postgres (`bucket_settings`) и проверяется перед записью в
-обоих контурах: базовая загрузка (`POST /api/files`), завершение multipart и
+обоих контурах: базовая загрузка (`POST /api/files`), завершение параллельной загрузки файла по частям и
 операции фасада. Проверка выполняется до появления строки в `files` и до
 записи объекта, поэтому отклонённая загрузка не оставляет следов. Это
 **best-effort**-ограничение: объекты, записанные в бакет в обход сервиса,
@@ -282,7 +282,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   ├── Program.cs                     # DI, middleware, OpenAPI/Scalar, health checks
 │   │   ├── Controllers/
 │   │   │   ├── FilesController.cs         # файлы: загрузка, список, скачивание, PATCH, copy
-│   │   │   ├── UploadsController.cs       # multipart-сессии
+│   │   │   ├── UploadsController.cs       # сессии параллельной загрузки файла по частям
 │   │   │   ├── StorageController.cs       # статистика и информация о хранилище
 │   │   │   ├── ReonApiControllerBase.cs   # общий X-Reon-Actor и аудит для всех контроллеров
 │   │   │   ├── AdminOverviewController.cs # обзор хранилища
@@ -290,7 +290,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   │   ├── AdminObjectsController.cs  # объекты, версии, теги, presigned URL
 │   │   │   └── AdminAuditController.cs    # журнал операций
 │   │   ├── Contracts/
-│   │   │   ├── UploadFileRequest.cs       # multipart: файл + JSON-описание
+│   │   │   ├── UploadFileRequest.cs       # multipart/form-data: файл + JSON-описание
 │   │   │   ├── FileMetadataResponse.cs
 │   │   │   ├── FilesContracts.cs          # список, PATCH, copy, bulk delete
 │   │   │   ├── MultipartContracts.cs      # сессии загрузки и части
@@ -317,7 +317,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   ├── GlobalUsings.cs                # общие using для домена
 │   │   ├── Entities/
 │   │   │   ├── FileMetadata.cs            # доменная модель и переходы статусов
-│   │   │   ├── MultipartUpload.cs         # состояние multipart-сессии
+│   │   │   ├── MultipartUpload.cs         # состояние сессии параллельной загрузки файла по частям
 │   │   │   ├── MultipartUploadPart.cs     # загруженная часть
 │   │   │   ├── BucketSettings.cs          # квота и режим доступа бакета
 │   │   │   └── AuditEntry.cs              # запись журнала операций
@@ -335,7 +335,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   └── Services/
 │   │       ├── FileInput.cs               # общая валидация и построение ключа
 │   │       ├── FileStorageService.cs      # загрузка, выдача и удаление файлов
-│   │       ├── MultipartUploadService.cs  # явные multipart-сессии
+│   │       ├── MultipartUploadService.cs  # явные сессии параллельной загрузки файла по частям
 │   │       └── StorageAdminService.cs     # сценарии административного фасада
 │   └── Reon.Infrastructure/
 │       ├── GlobalUsings.cs                # общие using для инфраструктуры
@@ -352,7 +352,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │       │   ├── MultipartUploadRepository.cs
 │       │   ├── BucketSettingsRepository.cs
 │       │   ├── AuditRepository.cs
-│       │   └── Migrations/                # InitialCreate, multipart, admin storage
+│       │   └── Migrations/                # InitialCreate, загрузка по частям, admin storage
 │       ├── Reconciliation/
 │       │   ├── ReconciliationService.cs
 │       │   ├── ReconciliationBackgroundService.cs
@@ -361,7 +361,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │       ├── Services/
 │       │   └── SystemClock.cs
 │       ├── Storage/
-│       │   ├── S3ObjectStorage.cs          # Put/Get/Head/Delete/multipart
+│       │   ├── S3ObjectStorage.cs          # Put/Get/Head/Delete и загрузка по частям
 │       │   ├── S3ObjectStorageAdmin.cs     # бакеты, версии, lifecycle, policy, presign
 │       │   ├── S3BucketInitializer.cs
 │       │   └── TemporaryFileFactory.cs
@@ -441,7 +441,7 @@ Swift s3api не поддерживает весь S3-функционал, а L
 2. В Postgres создаётся строка `Pending`.
 3. Объект загружается в S3 с metadata `reon-file-id` и `reon-sha256`.
 4. Строка переводится в `Ready`, сохраняются ETag и версия объекта.
-5. Если S3 упал — строка становится `Failed`, незавершённый multipart абортится.
+5. Если S3 упал — строка становится `Failed`, незавершённая параллельная загрузка файла по частям прерывается.
 6. Если S3 загрузился, а финальный `SaveChanges` упал — сервис пытается удалить
    объект; если не получилось, строка останется `Pending` и сверка её разберёт.
 
@@ -466,7 +466,7 @@ curl -X POST http://localhost:8090/api/files \
 
 `metadata` — необязательная JSON-строка. Поля: `originalName`, `contentType`,
 `description`, `tags`. Если `originalName`/`contentType` не переданы, берутся из
-multipart-части.
+части `multipart/form-data`.
 
 Ответ `201 Created`:
 
@@ -596,7 +596,7 @@ curl -X POST http://localhost:8090/api/files/bulk-delete \
 До 100 уникальных `fileId`. В ответе — результат по каждому файлу
 (`Deleted`, `AlreadyDeleted`, `Deleting`, `NotFound`, `Failed`).
 
-### Multipart upload
+### Параллельная загрузка файла по частям
 
 Для больших файлов клиент может загружать части явно. S3 upload id и
 S3-авторизация остаются внутри сервиса; клиент видит только `uploadId`.
@@ -668,7 +668,7 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 
 Незавершённые загрузки живут `FileStorage:MultipartUploadLifetimeDays`
 (по умолчанию 7 дней, можно поставить 3–7). Фоновая очистка раз в
-`MultipartCleanupIntervalMinutes` абортит истёкшие сессии и S3 multipart upload
+`MultipartCleanupIntervalMinutes` абортит истёкшие сессии и S3-загрузки по частям
 старше этого срока, чтобы не утекало место в хранилище.
 
 ### Ошибки
@@ -690,8 +690,8 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 |---|---|
 | `400` | Пустой файл, неверный JSON metadata, превышены лимиты тегов/описания |
 | `404` | Файл не найден или удалён |
-| `409` | Файл не `Ready`, multipart-загрузка уже завершена/прервана или неактивна |
-| `410` | Multipart-загрузка истекла |
+| `409` | Файл не `Ready`, параллельная загрузка файла по частям уже завершена/прервана или неактивна |
+| `410` | Параллельная загрузка файла по частям истекла |
 | `411` | Для части не передан `Content-Length` |
 | `413` | Файл больше `FileStorage:MaxFileSizeBytes` |
 | `502` | S3 недоступен |
@@ -715,7 +715,7 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 | `S3:EnsureBucket` | `true` | Создать бакет при старте |
 | `FileStorage:DefaultOwner` | `system` | Служебное значение поля `owner` |
 | `FileStorage:MaxFileSizeBytes` | `1073741824` | Максимальный размер файла (1 GiB) |
-| `FileStorage:MultipartThresholdBytes` | `67108864` | Порог multipart (64 MiB) |
+| `FileStorage:MultipartThresholdBytes` | `67108864` | Порог параллельной загрузки файла по частям (64 MiB) |
 | `FileStorage:MultipartPartSizeBytes` | `16777216` | Рекомендуемый размер части (16 MiB) |
 | `FileStorage:MinMultipartPartSizeBytes` | `5242880` | Минимум для всех частей, кроме последней |
 | `FileStorage:MaxMultipartParts` | `10000` | Максимум частей в одной загрузке |
@@ -817,7 +817,7 @@ deleted_at timestamptz
 `owner` — служебное поле, сейчас всегда `system`; для проверки доступа оно не
 используется.
 
-Таблицы multipart-загрузок:
+Таблицы сессий параллельной загрузки файла по частям:
 
 ```
 multipart_uploads
@@ -873,17 +873,17 @@ audit_events
 представляет их переносимо. Версионирование, lifecycle, Object Lock и
 шифрование читаются из S3 и в базе не дублируются.
 
-## S3 и multipart
+## S3 и параллельная загрузка файла по частям
 
 - Ключ объекта генерируется сервисом: `files/{fileId:N}{расширение}`. Расширение
   берётся из `originalName` и нужно, чтобы Filestash показывал привычный формат
   файла; имя файла целиком в ключ не попадает. Старые объекты, загруженные до
   этого изменения, остаются без расширения в ключе.
-- До 64 MiB — обычный `PutObject`, больше — multipart с частью 16 MiB.
-- Для больших файлов доступны явные multipart-сессии: `POST /api/uploads`,
+- До 64 MiB — обычный `PutObject`, больше — параллельная загрузка файла по частям с частью 16 MiB.
+- Для больших файлов доступны явные сессии параллельной загрузки файла по частям: `POST /api/uploads`,
   части, complete/abort. S3 upload id наружу не отдаётся.
-- При ошибке multipart вызывается `AbortMultipartUpload`.
-- Истёкшие multipart-сессии и S3 upload старше
+- При ошибке параллельной загрузки файла по частям вызывается `AbortMultipartUpload`.
+- Истёкшие сессии параллельной загрузки файла по частям и S3 upload старше
   `MultipartUploadLifetimeDays` (по умолчанию 7 дней) абортятся фоновой очисткой.
   Это защита от утечки места в S3, а не памяти.
 - Сервис проверяет размер и SHA-256 после загрузки через metadata объекта.
@@ -906,11 +906,11 @@ dotnet test
 ```
 
 Unit-тесты покрывают успешную загрузку, ошибку S3, потерю объекта, удаление,
-превышение размера и multipart-сессии. Всего 8 тестов.
+превышение размера и сессии параллельной загрузки файла по частям. Всего 8 тестов.
 
 S3-слой дополнительно проверен вручную против `swift-s3api`: создание бакета,
 `PutObject`, `HeadObject` с metadata, `GetObject`, `DeleteObject`,
-multipart upload размером 6 MiB и явные multipart-сессии.
+параллельная загрузка файла по частям размером 6 MiB и явные сессии `/api/uploads`.
 
 ## Решения по неоднозначностям
 
@@ -924,7 +924,7 @@ multipart upload размером 6 MiB и явные multipart-сессии.
 | Аутентификация клиентов | Не реализована; сервис для доверенного внутреннего контура |
 | Что такое `version` | Бизнес-версия, сейчас всегда `1`; версия S3-объекта хранится отдельно в `s3_version_id` |
 | Базовый путь | `/api/files`, `/api/uploads`, `/api/storage` |
-| Формат загрузки | `multipart/form-data` для простой; бинарные части для явного multipart |
+| Формат загрузки | `multipart/form-data` для простой; бинарные части для явной параллельной загрузки файла по частям |
 | Формат метаданных и ошибок | JSON; ошибки — RFC 9457 ProblemDetails |
 | Формат содержимого | Бинарный поток, без base64 |
 | Удаление | Soft delete в Postgres + удаление объекта из S3; ответ 204/202 |
@@ -933,7 +933,7 @@ multipart upload размером 6 MiB и явные multipart-сессии.
 | Листинг | Есть: `GET /api/files` с фильтрами и страницами |
 | Range, presigned URL, S3 versioning | Нет |
 | Максимальный размер | 1 GiB, настраивается |
-| Multipart | Автоматический для простой загрузки >64 MiB и явные сессии `/api/uploads` |
+| Параллельная загрузка | Автоматическая для простой загрузки >64 MiB и явные сессии `/api/uploads` |
 | Один инстанс или несколько | Несколько инстансов безопасны: сверка берёт Postgres advisory lock |
 
 ## Осознанные ограничения
