@@ -15,12 +15,9 @@ builder.Services.AddOpenApi(options =>
         document.Info.Title = "Reon S3 Server";
         document.Info.Description =
             "Сервис хранения файлов и учёта их описаний.\n\n" +
-            "Базовый API (/api/files, /api/uploads, /api/storage) работает с " +
-            "файловым доменом в одном бакете; административный фасад (/api/admin) — " +
-            "со всеми бакетами S3: сырыми объектами, версиями, квотами и журналом.\n\n" +
-            "Хранилище — S3-совместимый провайдер (Swift s3api, MinIO, AWS S3). Часть " +
-            "административных возможностей зависит от провайдера: на запись недоступная " +
-            "возможность возвращает 501, на чтение — пустые значения.";
+            "Базовый API (Files, Uploads, Storage) работает с " +
+            "файловым доменом в одном бакете, административный фасад (Admin) — " +
+            "со всеми бакетами S3: сырыми объектами, версиями, квотами и журналом.";
         return Task.CompletedTask;
     });
     options.AddDocumentTransformer<OpenApiTagDescriptionsTransformer>();
