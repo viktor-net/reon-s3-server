@@ -2,10 +2,6 @@ using System.Net;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Util;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Reon.Infrastructure.Configuration;
 
 namespace Reon.Infrastructure.Storage;
 

@@ -1,6 +1,3 @@
-using System.Text.Json;
-using Reon.Core.Entities;
-
 namespace Reon.Api.Contracts;
 
 public sealed record FileMetadataResponse(

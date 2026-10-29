@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
-using Reon.Core.Exceptions;
-
 namespace Reon.Api.Errors;
 
 public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> logger) : IExceptionHandler

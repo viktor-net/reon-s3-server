@@ -1,5 +1,3 @@
-using Reon.Core.Enums;
-
 namespace Reon.Core.Exceptions;
 
 public sealed class FileNotReadyException : Exception

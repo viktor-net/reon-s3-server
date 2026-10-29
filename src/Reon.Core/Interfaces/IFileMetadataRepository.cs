@@ -1,6 +1,3 @@
-using Reon.Core.Entities;
-using Reon.Core.Enums;
-
 namespace Reon.Core.Interfaces;
 
 public interface IFileMetadataRepository

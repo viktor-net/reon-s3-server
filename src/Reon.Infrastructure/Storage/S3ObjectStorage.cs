@@ -3,12 +3,6 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Reon.Core.Exceptions;
-using Reon.Core.Interfaces;
-using Reon.Core.Options;
-using Reon.Infrastructure.Configuration;
 
 namespace Reon.Infrastructure.Storage;
 

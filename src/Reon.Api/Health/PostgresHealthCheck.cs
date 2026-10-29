@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Reon.Infrastructure.Persistence;
-
 namespace Reon.Api.Health;
 
 public sealed class PostgresHealthCheck(IServiceScopeFactory scopeFactory) : IHealthCheck

@@ -1,8 +1,3 @@
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
-using Reon.Core.Interfaces;
-using Reon.Core.Options;
-
 namespace Reon.Api.Health;
 
 public sealed class S3HealthCheck(

@@ -73,55 +73,56 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ### Структура проекта
 
 ```text
-.
-├── Reon.S3.Server.slnx              # решение: Api, Core, Infrastructure, тесты
-├── Directory.Build.props            # общие настройки сборки
-├── global.json                      # версия .NET SDK
-├── Dockerfile                       # сборка и запуск API в контейнере
-├── docker-compose.yml               # PostgreSQL + API, внешняя сеть Swift
-├── README.md                        # описание сервиса, API и архитектуры
-├── CONTRIBUTIONS.md                 # правила коммитов
+├── Reon.S3.Server.slnx                    # решение: Api, Core, Infrastructure, тесты
+├── Directory.Build.props                  # общие настройки сборки
+├── global.json                            # версия .NET SDK
+├── Dockerfile                             # сборка и запуск API в контейнере
+├── docker-compose.yml                     # PostgreSQL + API, внешняя сеть Swift
+├── README.md                              # описание сервиса, API и архитектуры
+├── CONTRIBUTIONS.md                       # правила коммитов
 ├── .config/
-│   └── dotnet-tools.json            # локальный dotnet-ef для миграций
+│   └── dotnet-tools.json                  # локальный dotnet-ef для миграций
 ├── src/
 │   ├── Reon.Api/
-│   │   ├── Program.cs               # DI, middleware, OpenAPI/Scalar, health checks
+│   │   ├── Program.cs                     # DI, middleware, OpenAPI/Scalar, health checks
 │   │   ├── Controllers/
-│   │   │   └── FilesController.cs   # четыре HTTP-операции
+│   │   │   └── FilesController.cs         # четыре HTTP-операции
 │   │   ├── Contracts/
-│   │   │   ├── UploadFileRequest.cs # multipart: файл + JSON-описание
+│   │   │   ├── UploadFileRequest.cs       # multipart: файл + JSON-описание
 │   │   │   └── FileMetadataResponse.cs
 │   │   ├── Errors/
-│   │   │   └── CoreExceptionHandler.cs # доменные ошибки → ProblemDetails
+│   │   │   └── CoreExceptionHandler.cs    # доменные ошибки → ProblemDetails
 │   │   ├── Health/
 │   │   │   ├── PostgresHealthCheck.cs
 │   │   │   └── S3HealthCheck.cs
 │   │   ├── Properties/
-│   │   │   └── launchSettings.json  # профиль запуска и автозапуск Scalar
-│   │   ├── appsettings.json         # общие настройки без секретов
-│   │   ├── appsettings.Development.json # локальные dev-настройки
-│   │   └── Reon.Api.http            # примеры запросов
+│   │   │   └── launchSettings.json        # профиль запуска и автозапуск Scalar
+│   │   ├── appsettings.json               # общие настройки без секретов
+│   │   ├── appsettings.Development.json   # локальные dev-настройки
+│   │   └── GlobalUsings.cs                # общие using для API
 │   ├── Reon.Core/
+│   │   ├── GlobalUsings.cs                # общие using для домена
 │   │   ├── Entities/
-│   │   │   └── FileMetadata.cs      # доменная модель и переходы статусов
+│   │   │   └── FileMetadata.cs            # доменная модель и переходы статусов
 │   │   ├── Enums/
-│   │   │   └── FileStatus.cs        # Pending/Ready/Deleting/...
-│   │   ├── Exceptions/              # доменные ошибки
-│   │   ├── Interfaces/              # IObjectStorage, IFileMetadataRepository, IClock...
-│   │   ├── Models/                  # UploadFileCommand, FileContent, DeleteOutcome
+│   │   │   └── FileStatus.cs              # Pending/Ready/Deleting/...
+│   │   ├── Exceptions/                    # доменные ошибки
+│   │   ├── Interfaces/                    # IObjectStorage, IFileMetadataRepository, IClock...
+│   │   ├── Models/                        # UploadFileCommand, FileContent, DeleteOutcome
 │   │   ├── Options/
-│   │   │   └── FileStorageOptions.cs # лимиты, таймауты, префикс ключей
+│   │   │   └── FileStorageOptions.cs      # лимиты, таймауты, префикс ключей
 │   │   └── Services/
-│   │       └── FileStorageService.cs # загрузка, выдача и удаление файлов
+│   │       └── FileStorageService.cs      # загрузка, выдача и удаление файлов
 │   └── Reon.Infrastructure/
+│       ├── GlobalUsings.cs                # общие using для инфраструктуры
 │       ├── Configuration/
-│       │   └── S3Options.cs         # endpoint, креды, бакет
+│       │   └── S3Options.cs               # endpoint, креды, бакет
 │       ├── Persistence/
 │       │   ├── ReonDbContext.cs
 │       │   ├── Configurations/
 │       │   │   └── FileMetadataConfiguration.cs
 │       │   ├── FileMetadataRepository.cs
-│       │   └── Migrations/          # миграция InitialCreate
+│       │   └── Migrations/                   # миграция InitialCreate
 │       ├── Reconciliation/
 │       │   ├── ReconciliationService.cs
 │       │   ├── ReconciliationBackgroundService.cs
@@ -129,14 +130,15 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │       ├── Services/
 │       │   └── SystemClock.cs
 │       ├── Storage/
-│       │   ├── S3ObjectStorage.cs   # Put/Get/Head/Delete/multipart
+│       │   ├── S3ObjectStorage.cs          # Put/Get/Head/Delete/multipart
 │       │   ├── S3BucketInitializer.cs
 │       │   └── TemporaryFileFactory.cs
-│       └── DependencyInjection.cs   # регистрация инфраструктуры
+│       └── DependencyInjection.cs          # регистрация инфраструктуры
 └── tests/
     └── Reon.UnitTests/
+        ├── GlobalUsings.cs                # общие using для тестов
         ├── FileStorageServiceTests.cs
-        └── Fakes/                   # тестовые реализации хранилища и репозитория
+        └── Fakes/                          # тестовые реализации хранилища и репозитория
 ```
 
 ## Источник истины и расхождения
@@ -160,11 +162,11 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ### Статусы
 
 ```
-Pending -> Ready -> Deleting -> Deleted
+Pending → Ready → Deleting → Deleted
    |         |
-   |         +-> Missing   (объект пропал из S3)
-   |         +-> Corrupted (размер/хеш не совпали)
-   +-> Failed
+   |         → Missing   (объект пропал из S3)
+   |         → Corrupted (размер/хеш не совпали)
+   → Failed
 ```
 
 | Статус | Значение |
@@ -513,7 +515,3 @@ upload размером 6 MiB.
 | Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |
 | Миграции не применились | `Database:AutoMigrate` или `dotnet ef database update` |
 | Файл `Missing` | Объект удалён из S3; проверьте бэкап/versioning |
-
-## Правила коммитов
-
-См. [CONTRIBUTIONS.md](CONTRIBUTIONS.md).

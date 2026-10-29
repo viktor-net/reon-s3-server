@@ -1,6 +1,4 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Reon.Core.Entities;
 
 namespace Reon.Infrastructure.Persistence.Configurations;
 

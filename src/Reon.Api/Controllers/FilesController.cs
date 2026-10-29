@@ -1,8 +1,3 @@
-using Microsoft.AspNetCore.Mvc;
-using Reon.Api.Contracts;
-using Reon.Core.Models;
-using Reon.Core.Services;
-
 namespace Reon.Api.Controllers;
 
 [ApiController]

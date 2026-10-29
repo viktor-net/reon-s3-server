@@ -1,16 +1,3 @@
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
-using Reon.Api.Errors;
-using Reon.Api.Health;
-using Reon.Core.Options;
-using Reon.Core.Services;
-using Reon.Infrastructure;
-using Reon.Infrastructure.Persistence;
-using Scalar.AspNetCore;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
