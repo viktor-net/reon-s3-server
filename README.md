@@ -266,7 +266,10 @@ curl -OJ http://localhost:8090/api/v1/files/{fileId}
 ```
 
 Ответ: бинарный поток с `Content-Type`, `Content-Disposition`, `Content-Length`
-и `ETag`. Range-запросы не поддерживаются.
+и `ETag`. `Content-Type` берётся из метаданных файла, имя в
+`Content-Disposition` — из `originalName`. Если передать в `metadata.originalName`
+имя без расширения, расширение не появится: сервер не угадывает формат по
+содержимому. Range-запросы не поддерживаются.
 
 ### Получение метаданных
 

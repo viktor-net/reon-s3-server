@@ -2,15 +2,15 @@ namespace Reon.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/files")]
-[Produces("application/json")]
 public sealed class FilesController(FileStorageService fileStorage) : ControllerBase
 {
     [HttpPost]
     [Consumes("multipart/form-data")]
+    [Produces("application/json")]
     [ProducesResponseType<FileMetadataResponse>(StatusCodes.Status201Created)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status413PayloadTooLarge, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<ActionResult<FileMetadataResponse>> Upload(
         [FromForm] UploadFileRequest request,
         CancellationToken cancellationToken)
@@ -53,11 +53,10 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
     }
 
     [HttpGet("{fileId:guid}")]
-    [Produces("application/octet-stream")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK, "application/octet-stream")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<IActionResult> Download(Guid fileId, CancellationToken cancellationToken)
     {
         var content = await fileStorage.OpenContentAsync(
@@ -80,8 +79,9 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
     }
 
     [HttpGet("{fileId:guid}/metadata")]
+    [Produces("application/json")]
     [ProducesResponseType<FileMetadataResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
     public async Task<ActionResult<FileMetadataResponse>> GetMetadata(
         Guid fileId,
         CancellationToken cancellationToken)
@@ -96,8 +96,8 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
     [HttpDelete("{fileId:guid}")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<IActionResult> Delete(Guid fileId, CancellationToken cancellationToken)
     {
         var outcome = await fileStorage.DeleteAsync(
