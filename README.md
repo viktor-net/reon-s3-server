@@ -48,6 +48,9 @@
 - Копирование файла и массовое удаление.
 - Явные multipart-сессии: начать, загрузить части, завершить, прервать, посмотреть статус.
 - Статистика и информация о хранилище.
+- Административный фасад `/api/v1/admin`: обзор, бакеты, объекты, версии,
+  квоты, lifecycle, анонимный доступ и журнал операций.
+- WebSocket-поток административных событий.
 - OpenAPI + Scalar UI с примерами.
 - Фоновая сверка Postgres и S3, очистка orphan-объектов и зависших multipart upload.
 - Health checks `/health/live` и `/health/ready`.
@@ -77,6 +80,169 @@
 | `GET` | `/api/v1/storage/stats` | Статистика по файлам |
 | `GET` | `/api/v1/storage/info` | Бакет, лимиты и настройки |
 | `GET` | `/health/live`, `/health/ready` | Проверки живости и готовности |
+
+## Административный фасад
+
+Клиентский API выше не меняется. Рядом живёт отдельный контур
+`/api/v1/admin` — фасад для портала администрирования хранилища. Он собирает
+несколько запросов к S3 и Postgres и отдаёт простые JSON-модели.
+
+Принципы:
+
+- старые `/api/v1/files`, `/api/v1/uploads`, `/api/v1/storage` остаются
+  фундаментальной функциональностью; фасад их не заменяет и не дублирует
+  сценарии жизненного цикла файлов;
+- фасад работает со всеми бакетами, клиентский API — с бакетом по умолчанию
+  (`S3:BucketName`);
+- вызывающая сторона не аутентифицируется, но может передать `X-Reon-Actor`;
+  значение попадает в журнал, по умолчанию используется `Admin:DefaultActor`;
+- возможности, которых нет у S3-провайдера (например, bucket policy на Swift
+  s3api), на запись возвращают `501 Not Implemented` в формате ProblemDetails,
+  а на чтение деградируют до пустых значений.
+
+### Чем фасад отличается от базового API
+
+Базовый API — это файловый домен: единица работы `fileId`, метаданные в
+Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и multipart-сессии.
+Фасад — это домен хранилища: бакеты, сырые ключи, версии и настройки S3.
+
+| Задача | Базовый API | Фасад |
+|---|---|---|
+| Идентификация | `fileId` | `bucket` + `key` |
+| Единица работы | файл с описанием и жизненным циклом | объект S3, в том числе не учтённый в Postgres |
+| Бакеты | один (`S3:BucketName`) | все бакеты, создание и настройки |
+| Список | строки `files` с фильтрами и страницами | объекты и префиксы в S3 |
+| Загрузка | `Pending → Ready`, SHA-256, multipart, запись в БД | запись объекта по произвольному ключу |
+| Удаление | статусная машина + фоновая сверка | немедленное удаление объекта или версии |
+| Специфика | — | квоты, usage, access, lifecycle, presigned URL, аудит, WS |
+
+Фасад не создаёт строки `files` и не участвует в сверке. Базовый API не умеет
+то, что нужно админке: список сырых объектов и «папок», версии, presigned URL,
+квоты, политики и агрегаты по всем бакетам.
+
+Минимально для экранов прототипа нужны: обзор, список/создание/настройки
+бакетов, браузер объектов, загрузка, карточка объекта с версиями и ссылкой,
+удаление, usage, access, аудит и WS. Эндпоинты `PUT .../lifecycle`,
+`PUT .../tags`, `PUT .../objects/{**key}`, `GET .../usage`,
+`POST .../usage/refresh` и `DELETE .../versions/{versionId}` — расширения:
+их можно убрать без потери функциональности прототипа.
+
+### Эндпоинты фасада
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| `GET` | `/api/v1/admin/overview` | Обзор: бакеты, объекты, объём, публичные бакеты, использование |
+| `GET` | `/api/v1/admin/buckets` | Список бакетов: `search`, `sort=name\|size\|objects`, страницы |
+| `POST` | `/api/v1/admin/buckets` | Создать бакет (версионирование, Object Lock, квота) |
+| `GET` | `/api/v1/admin/buckets/{bucket}` | Детали бакета: версии, Object Lock, шифрование, квота, использование |
+| `PATCH` | `/api/v1/admin/buckets/{bucket}` | Версионирование и квота (Object Lock неизменяем) |
+| `GET` | `/api/v1/admin/buckets/{bucket}/access` | Анонимный доступ и текущая bucket policy |
+| `PUT` | `/api/v1/admin/buckets/{bucket}/access` | `private` или `public-read` |
+| `GET` | `/api/v1/admin/buckets/{bucket}/lifecycle` | Правила lifecycle |
+| `PUT` | `/api/v1/admin/buckets/{bucket}/lifecycle` | Заменить правила lifecycle |
+| `GET` | `/api/v1/admin/buckets/{bucket}/usage` | Использование и квота (`refresh=true` — пересчёт) |
+| `POST` | `/api/v1/admin/buckets/{bucket}/usage/refresh` | Пересчитать использование и разослать событие |
+| `POST` | `/api/v1/admin/buckets/{bucket}/folders` | Создать префикс-маркер папки |
+| `GET` | `/api/v1/admin/buckets/{bucket}/objects` | Объекты и префиксы: `prefix`, `delimiter`, `search`, страницы |
+| `POST` | `/api/v1/admin/buckets/{bucket}/objects` | Загрузить несколько файлов (`multipart/form-data`), батч откатывается при ошибке |
+| `PUT` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Загрузить один объект потоком |
+| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Скачать объект (`versionId`) |
+| `HEAD` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Заголовки объекта |
+| `DELETE` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Удалить объект или версию |
+| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{key}/metadata` | Метаданные, теги, число версий |
+| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{key}/versions` | История версий |
+| `DELETE` | `/api/v1/admin/buckets/{bucket}/objects/{key}/versions/{versionId}` | Удалить конкретную версию |
+| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{key}/tags` | Теги объекта |
+| `PUT` | `/api/v1/admin/buckets/{bucket}/objects/{key}/tags` | Заменить теги объекта |
+| `POST` | `/api/v1/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная ссылка на скачивание |
+| `GET` | `/api/v1/admin/audit` | Журнал операций с фильтрами и страницами |
+| `WS` | `/api/v1/admin/events` | WebSocket-поток событий |
+
+### Ключи объектов в URL
+
+Для операций с самим объектом ключ передаётся как путь и может содержать
+слэши: `GET /api/v1/admin/buckets/documents/objects/contracts/2026/a.pdf`.
+
+Подресурсы (`metadata`, `versions`, `tags`, `presigned-urls`) используют один
+сегмент пути, поэтому ключ нужно URL-кодировать:
+`GET /api/v1/admin/buckets/documents/objects/contracts%2F2026%2Fa.pdf/metadata`.
+
+### Соответствие экранам прототипа
+
+| Экран прототипа | Что использовать |
+|---|---|
+| Обзор | `GET /api/v1/admin/overview` |
+| Бакеты | `GET/POST /api/v1/admin/buckets` |
+| Объекты | `GET /api/v1/admin/buckets/{bucket}/objects`, `POST .../objects`, `PUT .../objects/{**key}` |
+| Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `POST .../objects/{key}/presigned-urls` |
+| Настройки бакета | `PATCH /api/v1/admin/buckets/{bucket}`, `GET/PUT .../lifecycle`, `GET .../usage` |
+| Управление доступом | `GET/PUT /api/v1/admin/buckets/{bucket}/access` |
+| Использование и квоты | `GET /api/v1/admin/overview`, `GET .../usage`, `POST .../usage/refresh` |
+| Журнал операций | `GET /api/v1/admin/audit` |
+| Живые обновления | `WS /api/v1/admin/events` |
+
+`GET .../objects` по умолчанию не возвращает `contentType`: S3-листинг его не
+отдаёт. Передайте `includeContentType=true`, чтобы сервис дополнительно сделал
+`HEAD` по объектам страницы (не более 1000, с ограничением параллелизма 8).
+
+### Использование и квоты
+
+Использование считается по S3 (`ListObjectsV2`) и кешируется на
+`Admin:UsageCacheSeconds` (60 секунд). Параметр `refresh=true` (или
+`POST .../usage/refresh`) пересчитывает значение принудительно.
+
+Квота хранится в Postgres (`bucket_settings`) и проверяется перед записью в
+обоих контурах: базовая загрузка (`POST /api/v1/files`), завершение multipart и
+операции фасада. Проверка выполняется до появления строки в `files` и до
+записи объекта, поэтому отклонённая загрузка не оставляет следов. Это
+**best-effort**-ограничение: объекты, записанные в бакет в обход сервиса,
+учитываются только после пересчёта, а параллельные записи могут вместе
+пересечь квоту. Статус заполнения считает сервис:
+`Ok` < 80 %, `Warning` ≥ 80 %, `Critical` ≥ 95 %, `NoQuota` — если квоты нет.
+
+### Журнал операций
+
+Аудит пишется в Postgres (`audit_events`) и доступен через
+`GET /api/v1/admin/audit`:
+
+Один и тот же журнал пишут и фасад, и базовый API:
+
+- фасад: `bucket.create`, `bucket.update`, `bucket.access.update`,
+  `bucket.lifecycle.update`, `usage.refresh`, `object.upload`, `object.batch`,
+  `object.delete`, `object.version.delete`, `object.tags.update`,
+  `object.presign`, `folder.create`;
+- базовый API: `file.upload`, `file.metadata.update`, `file.copy`, `file.delete`,
+  `file.bulk-delete`, `upload.begin`, `upload.complete`, `upload.abort`;
+- `result`: `Success` / `Failure`, плюс `details` с деталями операции
+  (для `object.batch` в `details.rolledBack` перечислены удалённые ключи);
+- `actor` — из заголовка `X-Reon-Actor`, иначе `Admin:DefaultActor`;
+- сбой записи журнала логируется и не влияет на результат операции.
+
+### WebSocket-события
+
+`GET /api/v1/admin/events` — upgrade до WebSocket. Фильтры задаются в query:
+`?buckets=documents-prod,media-storage&types=object.changed,usage.updated`
+(оба параметра необязательны). Протокол односторонний: сервер присылает JSON,
+клиент может отправить `{"type":"ping"}` и получить `{"type":"pong"}`.
+
+Конверт:
+
+```json
+{
+  "type": "object.changed",
+  "occurredAt": "2026-10-29T12:24:00+00:00",
+  "bucket": "documents-prod",
+  "data": { "bucket": "documents-prod", "key": "contracts/a.pdf", "change": "created", "size": 1024 }
+}
+```
+
+| Тип | Когда приходит |
+|---|---|
+| `bucket.changed` | Создание/изменение бакета, access, lifecycle |
+| `object.changed` | Загрузка, удаление, теги, удаление версии, создание папки |
+| `usage.updated` | Пересчёт использования |
+| `audit.appended` | Новая запись журнала |
+| `heartbeat` | Keepalive каждые `Admin:EventHeartbeatSeconds` секунд |
 
 ## Архитектура
 
@@ -117,15 +283,26 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   ├── Controllers/
 │   │   │   ├── FilesController.cs         # файлы: загрузка, список, скачивание, PATCH, copy
 │   │   │   ├── UploadsController.cs       # multipart-сессии
-│   │   │   └── StorageController.cs       # статистика и информация о хранилище
+│   │   │   ├── StorageController.cs       # статистика и информация о хранилище
+│   │   │   ├── ReonApiControllerBase.cs   # общий X-Reon-Actor и аудит для всех контроллеров
+│   │   │   ├── AdminOverviewController.cs # обзор хранилища
+│   │   │   ├── AdminBucketsController.cs  # бакеты, квоты, access, lifecycle
+│   │   │   ├── AdminObjectsController.cs  # объекты, версии, теги, presigned URL
+│   │   │   └── AdminAuditController.cs    # журнал операций
 │   │   ├── Contracts/
 │   │   │   ├── UploadFileRequest.cs       # multipart: файл + JSON-описание
 │   │   │   ├── FileMetadataResponse.cs
 │   │   │   ├── FilesContracts.cs          # список, PATCH, copy, bulk delete
 │   │   │   ├── MultipartContracts.cs      # сессии загрузки и части
-│   │   │   └── StorageInfoResponse.cs
+│   │   │   ├── StorageInfoResponse.cs
+│   │   │   ├── AdminContracts.cs          # DTO административного фасада
+│   │   │   └── AdminMappings.cs           # доменные модели → DTO
 │   │   ├── Errors/
 │   │   │   └── CoreExceptionHandler.cs    # доменные ошибки → ProblemDetails
+│   │   ├── Events/
+│   │   │   ├── AdminEventHub.cs           # подписки и публикация событий
+│   │   │   ├── AdminEventsEndpoint.cs     # WebSocket /api/v1/admin/events
+│   │   │   └── AdminEventsHeartbeatService.cs
 │   │   ├── Health/
 │   │   │   ├── PostgresHealthCheck.cs
 │   │   │   └── S3HealthCheck.cs
@@ -141,19 +318,25 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   ├── Entities/
 │   │   │   ├── FileMetadata.cs            # доменная модель и переходы статусов
 │   │   │   ├── MultipartUpload.cs         # состояние multipart-сессии
-│   │   │   └── MultipartUploadPart.cs     # загруженная часть
+│   │   │   ├── MultipartUploadPart.cs     # загруженная часть
+│   │   │   ├── BucketSettings.cs          # квота и режим доступа бакета
+│   │   │   └── AuditEntry.cs              # запись журнала операций
 │   │   ├── Enums/
 │   │   │   ├── FileStatus.cs              # Pending/Ready/Deleting/...
-│   │   │   └── MultipartUploadStatus.cs   # Initiated/InProgress/...
+│   │   │   ├── MultipartUploadStatus.cs   # Initiated/InProgress/...
+│   │   │   ├── BucketAccessMode.cs        # Private/PublicRead
+│   │   │   └── AuditResult.cs             # Success/Failure
 │   │   ├── Exceptions/                    # доменные ошибки
-│   │   ├── Interfaces/                    # IObjectStorage, IMultipartUploadService, IClock...
-│   │   ├── Models/                        # UploadFileCommand, FileListQuery, StorageStats
+│   │   ├── Interfaces/                    # IObjectStorage, IStorageAdminService, IClock...
+│   │   ├── Models/                        # FileListQuery, StorageStats, модели фасада
 │   │   ├── Options/
-│   │   │   └── FileStorageOptions.cs      # лимиты, таймауты, префикс ключей
+│   │   │   ├── FileStorageOptions.cs      # лимиты, таймауты, префикс ключей
+│   │   │   └── AdminOptions.cs            # страницы, кеш usage, presigned URL
 │   │   └── Services/
 │   │       ├── FileInput.cs               # общая валидация и построение ключа
 │   │       ├── FileStorageService.cs      # загрузка, выдача и удаление файлов
-│   │       └── MultipartUploadService.cs  # явные multipart-сессии
+│   │       ├── MultipartUploadService.cs  # явные multipart-сессии
+│   │       └── StorageAdminService.cs     # сценарии административного фасада
 │   └── Reon.Infrastructure/
 │       ├── GlobalUsings.cs                # общие using для инфраструктуры
 │       ├── Configuration/
@@ -162,10 +345,14 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │       │   ├── ReonDbContext.cs
 │       │   ├── Configurations/
 │       │   │   ├── FileMetadataConfiguration.cs
-│       │   │   └── MultipartUploadConfiguration.cs
+│       │   │   ├── MultipartUploadConfiguration.cs
+│       │   │   ├── BucketSettingsConfiguration.cs
+│       │   │   └── AuditEntryConfiguration.cs
 │       │   ├── FileMetadataRepository.cs
 │       │   ├── MultipartUploadRepository.cs
-│       │   └── Migrations/                # InitialCreate, multipart, индексы списка
+│       │   ├── BucketSettingsRepository.cs
+│       │   ├── AuditRepository.cs
+│       │   └── Migrations/                # InitialCreate, multipart, admin storage
 │       ├── Reconciliation/
 │       │   ├── ReconciliationService.cs
 │       │   ├── ReconciliationBackgroundService.cs
@@ -175,6 +362,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │       │   └── SystemClock.cs
 │       ├── Storage/
 │       │   ├── S3ObjectStorage.cs          # Put/Get/Head/Delete/multipart
+│       │   ├── S3ObjectStorageAdmin.cs     # бакеты, версии, lifecycle, policy, presign
 │       │   ├── S3BucketInitializer.cs
 │       │   └── TemporaryFileFactory.cs
 │       └── DependencyInjection.cs          # регистрация инфраструктуры
@@ -183,7 +371,8 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
         ├── GlobalUsings.cs                # общие using для тестов
         ├── FileStorageServiceTests.cs
         ├── MultipartUploadServiceTests.cs
-        └── Fakes/                          # тестовые реализации хранилища и репозитория
+        ├── StorageAdminServiceTests.cs
+        └── Fakes/                          # тестовые реализации хранилища и репозиториев
 ```
 
 ## Источник истины и расхождения
@@ -540,6 +729,12 @@ curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/abort
 | `FileStorage:OrphanSweepIntervalMinutes` | `360` | Интервал очистки orphan |
 | `FileStorage:OrphanGracePeriodHours` | `24` | Grace period для orphan |
 | `FileStorage:DeletedRetentionDays` | `30` | Сколько хранить soft-deleted строки |
+| `Admin:UsageCacheSeconds` | `60` | Кеш рассчитанного использования бакета |
+| `Admin:MaxPageSize` | `200` | Максимальный размер страницы админ-списков |
+| `Admin:MaxPresignedUrlLifetimeSeconds` | `604800` | Максимальный срок presigned URL (7 дней) |
+| `Admin:MaxSearchObjects` | `5000` | Сколько объектов сканировать при поиске по подстроке |
+| `Admin:DefaultActor` | `system` | Actor, если не передан `X-Reon-Actor` |
+| `Admin:EventHeartbeatSeconds` | `30` | Интервал heartbeat в WebSocket-потоке |
 
 Dev-значения S3 (`test:tester` / `testing`) лежат в `appsettings.Development.json`
 и предназначены только для локального стенда. В production задавайте их через
@@ -653,6 +848,30 @@ multipart_upload_parts
 - `ix_files_status_created_at`, `ix_files_created_at` — список и сортировка.
 - `ix_files_content_type`, `ix_files_original_name` — фильтры списка.
 - `ix_multipart_uploads_status_expires_at` — очистка зависших загрузок.
+
+Административные таблицы:
+
+```
+bucket_settings
+  bucket varchar(255) pk
+  quota_bytes bigint null
+  access_mode varchar(32)   -- Private | PublicRead
+  created_at, updated_at timestamptz
+
+audit_events
+  id uuid pk
+  occurred_at timestamptz
+  actor varchar(256)
+  action varchar(64)
+  resource varchar(1200)
+  result varchar(16)        -- Success | Failure
+  status_code int null
+  details jsonb null
+```
+
+Квота и режим доступа хранятся в Postgres, потому что стандартный S3 API не
+представляет их переносимо. Версионирование, lifecycle, Object Lock и
+шифрование читаются из S3 и в базе не дублируются.
 
 ## S3 и multipart
 
