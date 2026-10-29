@@ -13,7 +13,14 @@ builder.Services.AddOpenApi(options =>
     options.AddDocumentTransformer((document, _, _) =>
     {
         document.Info.Title = "Reon S3 Server";
-        document.Info.Description = "Сервис хранения файлов и учёта их описаний.";
+        document.Info.Description =
+            "Сервис хранения файлов и учёта их описаний.\n\n" +
+            "Базовый API (/api/v1/files, /api/v1/uploads, /api/v1/storage) работает с " +
+            "файловым доменом в одном бакете; административный фасад (/api/v1/admin) — " +
+            "со всеми бакетами S3: сырыми объектами, версиями, квотами и журналом.\n\n" +
+            "Хранилище — S3-совместимый провайдер (Swift s3api, MinIO, AWS S3). Часть " +
+            "административных возможностей зависит от провайдера: на запись недоступная " +
+            "возможность возвращает 501, на чтение — пустые значения.";
         return Task.CompletedTask;
     });
     options.AddDocumentTransformer<OpenApiTagDescriptionsTransformer>();
@@ -91,7 +98,12 @@ app.MapScalarApiReference(options =>
         // Share, Deploy, Generate SDK — это подписи пунктов меню Scalar.
         .HideDeveloperTools()
         // Штатной опции для подписи "Powered by Scalar" нет — гасим её CSS.
-        .WithCustomCss("a[href*=\"utm_source=powered-by\"]{display:none!important}")
+        // Заодно снимаем обрезку описаний групп и операций: по умолчанию Scalar
+        // показывает только 7 строк и не даёт их раскрыть.
+        .WithCustomCss(
+            "a[href*=\"utm_source=powered-by\"]{display:none!important}" +
+            ".scalar-app .section-content .line-clamp-\\(--markdown-clamp\\)" +
+            "{-webkit-line-clamp:unset;display:block;overflow:visible}")
         // Обёртка Scalar для .NET 2.18.3 не отдаёт defaultOpenFirstTag,
         // поэтому настройка приходит из отдельного JS-модуля. Путь
         // относительный, чтобы работало и при размещении под PathBase.
