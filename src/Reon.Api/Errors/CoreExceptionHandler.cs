@@ -81,6 +81,16 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
         {
             LogStorageFailure(logger, exception);
         }
+        else
+        {
+            LogHandledException(
+                logger,
+                exception,
+                httpContext.Request.Method,
+                httpContext.Request.Path,
+                statusCode,
+                title);
+        }
 
         httpContext.Response.StatusCode = statusCode;
         httpContext.Response.ContentType = "application/problem+json";
@@ -100,4 +110,16 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
 
     [LoggerMessage(EventId = 3001, Level = LogLevel.Error, Message = "Object storage operation failed.")]
     private static partial void LogStorageFailure(ILogger logger, Exception exception);
+
+    [LoggerMessage(
+        EventId = 3002,
+        Level = LogLevel.Warning,
+        Message = "Request {Method} {Path} failed with {StatusCode} {Title}.")]
+    private static partial void LogHandledException(
+        ILogger logger,
+        Exception exception,
+        string method,
+        string path,
+        int statusCode,
+        string title);
 }

@@ -25,3 +25,7 @@ Thumbs.db
 .postgres-pull.log
 .apt-postgres.log
 *.log
+
+## Local structured logs
+logs/
+*.ndjson

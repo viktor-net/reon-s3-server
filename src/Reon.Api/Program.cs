@@ -1,4 +1,12 @@
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
 
 builder.Services.AddControllers();
 
@@ -75,6 +83,8 @@ if (app.Configuration.GetValue("Database:AutoMigrate", false))
     var dbContext = scope.ServiceProvider.GetRequiredService<ReonDbContext>();
     await dbContext.Database.MigrateAsync();
 }
+
+app.UseSerilogRequestLogging();
 
 app.UseExceptionHandler();
 
