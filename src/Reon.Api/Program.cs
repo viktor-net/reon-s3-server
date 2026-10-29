@@ -101,7 +101,7 @@ app.MapScalarApiReference(options =>
         // Остальные клиенты остаются под кнопкой More.
         .WithFeaturedClients(
             new(ScalarTarget.Shell, ScalarClient.Curl),
-            new(ScalarTarget.JavaScript, ScalarClient.Fetch),
+            new(ScalarTarget.JavaScript, ScalarClient.Axios),
             new(ScalarTarget.CSharp, ScalarClient.HttpClient),
             new(ScalarTarget.Java, ScalarClient.OkHttp))
         // Штатной опции для подписи "Powered by Scalar" нет — гасим её CSS.
