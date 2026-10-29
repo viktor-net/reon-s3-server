@@ -5,8 +5,8 @@ using Microsoft.OpenApi;
 namespace Reon.Api.OpenApi;
 
 /// <summary>
-/// Adds human-readable descriptions and request/response examples to the
-/// file endpoints. Scalar renders these examples next to the OpenAPI schema.
+/// Добавляет человекочитаемые описания и примеры запросов/ответов к
+/// файловым эндпоинтам. Scalar показывает эти примеры рядом со схемой OpenAPI.
 /// </summary>
 public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTransformer
 {

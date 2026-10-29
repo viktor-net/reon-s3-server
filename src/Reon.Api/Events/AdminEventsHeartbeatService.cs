@@ -1,7 +1,7 @@
 namespace Reon.Api.Events;
 
 /// <summary>
-/// Keeps idle WebSocket subscribers alive and lets clients detect a dead link.
+/// Поддерживает простаивающие WebSocket-подписки и позволяет клиентам
 /// </summary>
 public sealed partial class AdminEventsHeartbeatService(
     AdminEventHub hub,
@@ -36,7 +36,7 @@ public sealed partial class AdminEventsHeartbeatService(
         }
         catch (OperationCanceledException)
         {
-            // Host is shutting down.
+            // Хост завершает работу.
         }
     }
 

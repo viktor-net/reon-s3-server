@@ -8,8 +8,8 @@ public sealed class UploadFileRequest
     public IFormFile File { get; set; } = default!;
 
     /// <summary>
-    /// Optional JSON object with originalName, contentType, description and tags.
-    /// A JSON string keeps the facade independent from S3 headers and form field names.
+    /// Необязательный JSON-объект с originalName, contentType, description и tags.
+    /// Строка JSON изолирует API от заголовков S3 и имён полей формы.
     /// </summary>
     public string? Metadata { get; set; }
 }

@@ -10,8 +10,8 @@ public sealed class S3HealthCheck(
     {
         try
         {
-            // A HEAD for a key that should not exist is enough to prove that the
-            // endpoint is reachable and credentials are accepted. A 404 is healthy.
+            // HEAD для заведомо несуществующего ключа достаточно, чтобы проверить
+            // доступность эндпоинта и приём учётных данных. 404 — это норма.
             await objectStorage.HeadAsync(
                 $"{options.Value.KeyPrefix}__healthcheck__",
                 cancellationToken);

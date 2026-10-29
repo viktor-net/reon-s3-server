@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace Reon.Api.Events;
 
 /// <summary>
-/// Registry of administrative WebSocket subscribers and the publisher used by
-/// the facade services. Events are filtered per connection by bucket and type.
+/// Реестр административных WebSocket-подписчиков и публикатор, которым
+/// пользуются сервисы фасада. События фильтруются для каждого соединения
 /// </summary>
 public sealed partial class AdminEventHub(ILogger<AdminEventHub> logger) : IStorageEventPublisher
 {
@@ -64,7 +64,7 @@ public sealed partial class AdminEventHub(ILogger<AdminEventHub> logger) : IStor
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The client is gone or the socket is broken: drop the subscription.
+                // Клиент отключился или сокет сломан: удаляем подписку.
                 LogSendFailed(logger, exception, subscription.Id);
                 Remove(subscription.Id);
             }

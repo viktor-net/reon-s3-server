@@ -126,10 +126,10 @@ public sealed class UploadObjectsRequest
 
     public string? Prefix { get; set; }
 
-    /// <summary>JSON object with user metadata applied to every uploaded file.</summary>
+    /// <summary>JSON-объект с пользовательскими метаданными для каждого загружаемого файла.</summary>
     public string? Metadata { get; set; }
 
-    /// <summary>JSON object with object tags applied to every uploaded file.</summary>
+    /// <summary>JSON-объект с тегами для каждого загружаемого файла.</summary>
     public string? Tags { get; set; }
 }
 

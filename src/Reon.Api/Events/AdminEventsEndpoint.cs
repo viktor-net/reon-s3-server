@@ -6,9 +6,9 @@ namespace Reon.Api.Events;
 public static class AdminEventsEndpoint
 {
     /// <summary>
-    /// Upgrades the request to a WebSocket and streams administrative events as
-    /// JSON envelopes: { "type", "occurredAt", "bucket", "data" }.
-    /// Optional query parameters: <c>buckets</c> and <c>types</c> (comma separated).
+    /// Переводит запрос в WebSocket и передаёт административные события
+    /// JSON-конвертами: { "type", "occurredAt", "bucket", "data" }.
+    /// Необязательные query-параметры: <c>buckets</c> и <c>types</c> (через запятую).
     /// </summary>
     public static IEndpointRouteBuilder MapAdminEvents(this IEndpointRouteBuilder endpoints)
     {
@@ -71,8 +71,8 @@ public static class AdminEventsEndpoint
 
                 var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
 
-                // The protocol is server-to-client; the only client message is a
-                // lightweight keepalive that we echo back.
+                // Протокол односторонний, от сервера к клиенту; единственное сообщение
+                // клиента — лёгкий keepalive, который мы возвращаем обратно.
                 if (message.Contains("\"ping\"", StringComparison.OrdinalIgnoreCase))
                 {
                     await hub.SendTextAsync(
@@ -84,11 +84,11 @@ public static class AdminEventsEndpoint
         }
         catch (OperationCanceledException)
         {
-            // Request aborted.
+            // Запрос отменён.
         }
         catch (WebSocketException)
         {
-            // Client disconnected abruptly.
+            // Клиент оборвал соединение.
         }
         finally
         {
@@ -105,7 +105,7 @@ public static class AdminEventsEndpoint
                 }
                 catch (WebSocketException)
                 {
-                    // The peer is already gone.
+                    // Пир уже отключился.
                 }
             }
         }

@@ -30,7 +30,7 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddExceptionHandler<CoreExceptionHandler>();
 
-// Administrative real-time contour: a WebSocket hub plus its keepalive loop.
+// Административный real-time контур: WebSocket-хаб и цикл heartbeat.
 builder.Services.AddSingleton<AdminEventHub>();
 builder.Services.AddSingleton<IStorageEventPublisher>(provider => provider.GetRequiredService<AdminEventHub>());
 builder.Services.AddHostedService<AdminEventsHeartbeatService>();
@@ -86,8 +86,8 @@ app.MapScalarApiReference(options =>
         .DisableMcp()
         .HideClientButton()
         .DisableAgent()
-        // Скрывает всю панель developer tools (Developer Tools, Configure,
-        // Share, Deploy, Generate SDK).
+        // Скрывает всю панель developer tools: Developer Tools, Configure,
+        // Share, Deploy, Generate SDK — это подписи пунктов меню Scalar.
         .HideDeveloperTools()
         // Штатной опции для подписи "Powered by Scalar" нет — гасим её CSS.
         .WithCustomCss("a[href*=\"utm_source=powered-by\"]{display:none!important}")
@@ -102,8 +102,8 @@ app.MapGet("/scalar/admin-config.js", () =>
         Results.Text("export default { defaultOpenFirstTag: false };", "text/javascript"))
     .ExcludeFromDescription();
 
-// Scalar resolves its OpenAPI source relative to the UI URL. Keep aliases for
-// both /scalar/v1 and /scalar/v1/ so the UI can load /openapi/v1.json.
+// Scalar ищет OpenAPI относительно URL интерфейса. Оставляем псевдонимы
+// для /scalar/v1 и /scalar/v1/, чтобы UI мог загрузить /openapi/v1.json.
 app.MapGet("/scalar/openapi/{documentName}.json", (string documentName) =>
         Results.Redirect($"/openapi/{documentName}.json", permanent: false))
     .ExcludeFromDescription();
