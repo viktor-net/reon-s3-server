@@ -1,12 +1,24 @@
 using Serilog;
+using Serilog.Formatting.Compact;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
+
+var logDirectory = ResolveLogDirectory(builder.Environment.ContentRootPath);
+
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
-    .Enrich.FromLogContext());
+    .Enrich.FromLogContext()
+    .WriteTo.File(
+        new CompactJsonFormatter(),
+        Path.Combine(logDirectory, "reon-.ndjson"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 14,
+        fileSizeLimitBytes: 52_428_800,
+        rollOnFileSizeLimit: true,
+        shared: true));
 
 builder.Services.AddControllers();
 
@@ -176,6 +188,21 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 });
 
 app.Run();
+
+static string ResolveLogDirectory(string contentRoot)
+{
+    var directory = new DirectoryInfo(contentRoot);
+
+    while (directory is not null && !directory.EnumerateFiles("*.slnx").Any())
+    {
+        directory = directory.Parent;
+    }
+
+    var root = directory?.FullName ?? contentRoot;
+    var logs = Path.Combine(root, "logs");
+    Directory.CreateDirectory(logs);
+    return logs;
+}
 
 public partial class Program
 {
