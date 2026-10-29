@@ -48,7 +48,7 @@
 - Копирование файла и массовое удаление.
 - Явные multipart-сессии: начать, загрузить части, завершить, прервать, посмотреть статус.
 - Статистика и информация о хранилище.
-- Административный фасад `/api/v1/admin`: обзор, бакеты, объекты, версии,
+- Административный фасад `/api/admin`: обзор, бакеты, объекты, версии,
   квоты, lifecycle, анонимный доступ и журнал операций.
 - WebSocket-поток административных событий.
 - OpenAPI + Scalar UI с примерами.
@@ -61,35 +61,35 @@
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| `POST` | `/api/v1/files` | Загрузить файл, вернуть `fileId` |
-| `GET` | `/api/v1/files` | Список файлов с фильтрами |
-| `GET` | `/api/v1/files/{fileId}` | Скачать файл |
-| `HEAD` | `/api/v1/files/{fileId}` | Заголовки файла без тела |
-| `GET` | `/api/v1/files/{fileId}/metadata` | Получить описание |
-| `PATCH` | `/api/v1/files/{fileId}/metadata` | Изменить имя, описание, теги |
-| `DELETE` | `/api/v1/files/{fileId}` | Удалить файл |
-| `POST` | `/api/v1/files/{fileId}/copy` | Скопировать файл |
-| `POST` | `/api/v1/files/bulk-delete` | Удалить несколько файлов |
-| `POST` | `/api/v1/uploads` | Начать multipart-загрузку |
-| `GET` | `/api/v1/uploads` | Список активных multipart-загрузок |
-| `GET` | `/api/v1/uploads/{uploadId}` | Статус загрузки и список частей |
-| `PUT` | `/api/v1/uploads/{uploadId}/parts/{partNumber}` | Загрузить часть |
-| `POST` | `/api/v1/uploads/{uploadId}/complete` | Завершить загрузку и создать файл |
-| `DELETE` | `/api/v1/uploads/{uploadId}` | Прервать загрузку |
-| `POST` | `/api/v1/uploads/{uploadId}/abort` | Прервать загрузку (алиас) |
-| `GET` | `/api/v1/storage/stats` | Статистика по файлам |
-| `GET` | `/api/v1/storage/info` | Бакет, лимиты и настройки |
+| `POST` | `/api/files` | Загрузить файл, вернуть `fileId` |
+| `GET` | `/api/files` | Список файлов с фильтрами |
+| `GET` | `/api/files/{fileId}` | Скачать файл |
+| `HEAD` | `/api/files/{fileId}` | Заголовки файла без тела |
+| `GET` | `/api/files/{fileId}/metadata` | Получить описание |
+| `PATCH` | `/api/files/{fileId}/metadata` | Изменить имя, описание, теги |
+| `DELETE` | `/api/files/{fileId}` | Удалить файл |
+| `POST` | `/api/files/{fileId}/copy` | Скопировать файл |
+| `POST` | `/api/files/bulk-delete` | Удалить несколько файлов |
+| `POST` | `/api/uploads` | Начать multipart-загрузку |
+| `GET` | `/api/uploads` | Список активных multipart-загрузок |
+| `GET` | `/api/uploads/{uploadId}` | Статус загрузки и список частей |
+| `PUT` | `/api/uploads/{uploadId}/parts/{partNumber}` | Загрузить часть |
+| `POST` | `/api/uploads/{uploadId}/complete` | Завершить загрузку и создать файл |
+| `DELETE` | `/api/uploads/{uploadId}` | Прервать загрузку |
+| `POST` | `/api/uploads/{uploadId}/abort` | Прервать загрузку (алиас) |
+| `GET` | `/api/storage/stats` | Статистика по файлам |
+| `GET` | `/api/storage/info` | Бакет, лимиты и настройки |
 | `GET` | `/health/live`, `/health/ready` | Проверки живости и готовности |
 
 ## Административный фасад
 
 Клиентский API выше не меняется. Рядом живёт отдельный контур
-`/api/v1/admin` — фасад для портала администрирования хранилища. Он собирает
+`/api/admin` — фасад для портала администрирования хранилища. Он собирает
 несколько запросов к S3 и Postgres и отдаёт простые JSON-модели.
 
 Принципы:
 
-- старые `/api/v1/files`, `/api/v1/uploads`, `/api/v1/storage` остаются
+- старые `/api/files`, `/api/uploads`, `/api/storage` остаются
   фундаментальной функциональностью; фасад их не заменяет и не дублирует
   сценарии жизненного цикла файлов;
 - фасад работает со всеми бакетами, клиентский API — с бакетом по умолчанию
@@ -131,55 +131,55 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| `GET` | `/api/v1/admin/overview` | Обзор: бакеты, объекты, объём, публичные бакеты, использование |
-| `GET` | `/api/v1/admin/buckets` | Список бакетов: `search`, `sort=name\|size\|objects`, страницы |
-| `POST` | `/api/v1/admin/buckets` | Создать бакет (версионирование, Object Lock, квота) |
-| `GET` | `/api/v1/admin/buckets/{bucket}` | Детали бакета: версии, Object Lock, шифрование, квота, использование |
-| `PATCH` | `/api/v1/admin/buckets/{bucket}` | Версионирование и квота (Object Lock неизменяем) |
-| `GET` | `/api/v1/admin/buckets/{bucket}/access` | Анонимный доступ и текущая bucket policy |
-| `PUT` | `/api/v1/admin/buckets/{bucket}/access` | `private` или `public-read` |
-| `GET` | `/api/v1/admin/buckets/{bucket}/lifecycle` | Правила lifecycle |
-| `PUT` | `/api/v1/admin/buckets/{bucket}/lifecycle` | Заменить правила lifecycle |
-| `GET` | `/api/v1/admin/buckets/{bucket}/usage` | Использование и квота (`refresh=true` — пересчёт) |
-| `POST` | `/api/v1/admin/buckets/{bucket}/usage/refresh` | Пересчитать использование и разослать событие |
-| `POST` | `/api/v1/admin/buckets/{bucket}/folders` | Создать префикс-маркер папки |
-| `GET` | `/api/v1/admin/buckets/{bucket}/objects` | Объекты и префиксы: `prefix`, `delimiter`, `search`, страницы |
-| `POST` | `/api/v1/admin/buckets/{bucket}/objects` | Загрузить несколько файлов (`multipart/form-data`), батч откатывается при ошибке |
-| `PUT` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Загрузить один объект потоком |
-| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Скачать объект (`versionId`) |
-| `HEAD` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Заголовки объекта |
-| `DELETE` | `/api/v1/admin/buckets/{bucket}/objects/{**key}` | Удалить объект или версию |
-| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{key}/metadata` | Метаданные, теги, число версий |
-| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{key}/versions` | История версий |
-| `DELETE` | `/api/v1/admin/buckets/{bucket}/objects/{key}/versions/{versionId}` | Удалить конкретную версию |
-| `GET` | `/api/v1/admin/buckets/{bucket}/objects/{key}/tags` | Теги объекта |
-| `PUT` | `/api/v1/admin/buckets/{bucket}/objects/{key}/tags` | Заменить теги объекта |
-| `POST` | `/api/v1/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная ссылка на скачивание |
-| `GET` | `/api/v1/admin/audit` | Журнал операций с фильтрами и страницами |
-| `WS` | `/api/v1/admin/events` | WebSocket-поток событий |
+| `GET` | `/api/admin/overview` | Обзор: бакеты, объекты, объём, публичные бакеты, использование |
+| `GET` | `/api/admin/buckets` | Список бакетов: `search`, `sort=name\|size\|objects`, страницы |
+| `POST` | `/api/admin/buckets` | Создать бакет (версионирование, Object Lock, квота) |
+| `GET` | `/api/admin/buckets/{bucket}` | Детали бакета: версии, Object Lock, шифрование, квота, использование |
+| `PATCH` | `/api/admin/buckets/{bucket}` | Версионирование и квота (Object Lock неизменяем) |
+| `GET` | `/api/admin/buckets/{bucket}/access` | Анонимный доступ и текущая bucket policy |
+| `PUT` | `/api/admin/buckets/{bucket}/access` | `private` или `public-read` |
+| `GET` | `/api/admin/buckets/{bucket}/lifecycle` | Правила lifecycle |
+| `PUT` | `/api/admin/buckets/{bucket}/lifecycle` | Заменить правила lifecycle |
+| `GET` | `/api/admin/buckets/{bucket}/usage` | Использование и квота (`refresh=true` — пересчёт) |
+| `POST` | `/api/admin/buckets/{bucket}/usage/refresh` | Пересчитать использование и разослать событие |
+| `POST` | `/api/admin/buckets/{bucket}/folders` | Создать префикс-маркер папки |
+| `GET` | `/api/admin/buckets/{bucket}/objects` | Объекты и префиксы: `prefix`, `delimiter`, `search`, страницы |
+| `POST` | `/api/admin/buckets/{bucket}/objects` | Загрузить несколько файлов (`multipart/form-data`), батч откатывается при ошибке |
+| `PUT` | `/api/admin/buckets/{bucket}/objects/{**key}` | Загрузить один объект потоком |
+| `GET` | `/api/admin/buckets/{bucket}/objects/{**key}` | Скачать объект (`versionId`) |
+| `HEAD` | `/api/admin/buckets/{bucket}/objects/{**key}` | Заголовки объекта |
+| `DELETE` | `/api/admin/buckets/{bucket}/objects/{**key}` | Удалить объект или версию |
+| `GET` | `/api/admin/buckets/{bucket}/objects/{key}/metadata` | Метаданные, теги, число версий |
+| `GET` | `/api/admin/buckets/{bucket}/objects/{key}/versions` | История версий |
+| `DELETE` | `/api/admin/buckets/{bucket}/objects/{key}/versions/{versionId}` | Удалить конкретную версию |
+| `GET` | `/api/admin/buckets/{bucket}/objects/{key}/tags` | Теги объекта |
+| `PUT` | `/api/admin/buckets/{bucket}/objects/{key}/tags` | Заменить теги объекта |
+| `POST` | `/api/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная ссылка на скачивание |
+| `GET` | `/api/admin/audit` | Журнал операций с фильтрами и страницами |
+| `WS` | `/api/admin/events` | WebSocket-поток событий |
 
 ### Ключи объектов в URL
 
 Для операций с самим объектом ключ передаётся как путь и может содержать
-слэши: `GET /api/v1/admin/buckets/documents/objects/contracts/2026/a.pdf`.
+слэши: `GET /api/admin/buckets/documents/objects/contracts/2026/a.pdf`.
 
 Подресурсы (`metadata`, `versions`, `tags`, `presigned-urls`) используют один
 сегмент пути, поэтому ключ нужно URL-кодировать:
-`GET /api/v1/admin/buckets/documents/objects/contracts%2F2026%2Fa.pdf/metadata`.
+`GET /api/admin/buckets/documents/objects/contracts%2F2026%2Fa.pdf/metadata`.
 
 ### Соответствие экранам прототипа
 
 | Экран прототипа | Что использовать |
 |---|---|
-| Обзор | `GET /api/v1/admin/overview` |
-| Бакеты | `GET/POST /api/v1/admin/buckets` |
-| Объекты | `GET /api/v1/admin/buckets/{bucket}/objects`, `POST .../objects`, `PUT .../objects/{**key}` |
+| Обзор | `GET /api/admin/overview` |
+| Бакеты | `GET/POST /api/admin/buckets` |
+| Объекты | `GET /api/admin/buckets/{bucket}/objects`, `POST .../objects`, `PUT .../objects/{**key}` |
 | Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `POST .../objects/{key}/presigned-urls` |
-| Настройки бакета | `PATCH /api/v1/admin/buckets/{bucket}`, `GET/PUT .../lifecycle`, `GET .../usage` |
-| Управление доступом | `GET/PUT /api/v1/admin/buckets/{bucket}/access` |
-| Использование и квоты | `GET /api/v1/admin/overview`, `GET .../usage`, `POST .../usage/refresh` |
-| Журнал операций | `GET /api/v1/admin/audit` |
-| Живые обновления | `WS /api/v1/admin/events` |
+| Настройки бакета | `PATCH /api/admin/buckets/{bucket}`, `GET/PUT .../lifecycle`, `GET .../usage` |
+| Управление доступом | `GET/PUT /api/admin/buckets/{bucket}/access` |
+| Использование и квоты | `GET /api/admin/overview`, `GET .../usage`, `POST .../usage/refresh` |
+| Журнал операций | `GET /api/admin/audit` |
+| Живые обновления | `WS /api/admin/events` |
 
 `GET .../objects` по умолчанию не возвращает `contentType`: S3-листинг его не
 отдаёт. Передайте `includeContentType=true`, чтобы сервис дополнительно сделал
@@ -192,7 +192,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 `POST .../usage/refresh`) пересчитывает значение принудительно.
 
 Квота хранится в Postgres (`bucket_settings`) и проверяется перед записью в
-обоих контурах: базовая загрузка (`POST /api/v1/files`), завершение multipart и
+обоих контурах: базовая загрузка (`POST /api/files`), завершение multipart и
 операции фасада. Проверка выполняется до появления строки в `files` и до
 записи объекта, поэтому отклонённая загрузка не оставляет следов. Это
 **best-effort**-ограничение: объекты, записанные в бакет в обход сервиса,
@@ -203,7 +203,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 ### Журнал операций
 
 Аудит пишется в Postgres (`audit_events`) и доступен через
-`GET /api/v1/admin/audit`:
+`GET /api/admin/audit`:
 
 Один и тот же журнал пишут и фасад, и базовый API:
 
@@ -220,7 +220,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 
 ### WebSocket-события
 
-`GET /api/v1/admin/events` — upgrade до WebSocket. Фильтры задаются в query:
+`GET /api/admin/events` — upgrade до WebSocket. Фильтры задаются в query:
 `?buckets=documents-prod,media-storage&types=object.changed,usage.updated`
 (оба параметра необязательны). Протокол односторонний: сервер присылает JSON,
 клиент может отправить `{"type":"ping"}` и получить `{"type":"pong"}`.
@@ -301,7 +301,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   │   └── CoreExceptionHandler.cs    # доменные ошибки → ProblemDetails
 │   │   ├── Events/
 │   │   │   ├── AdminEventHub.cs           # подписки и публикация событий
-│   │   │   ├── AdminEventsEndpoint.cs     # WebSocket /api/v1/admin/events
+│   │   │   ├── AdminEventsEndpoint.cs     # WebSocket /api/admin/events
 │   │   │   └── AdminEventsHeartbeatService.cs
 │   │   ├── Health/
 │   │   │   ├── PostgresHealthCheck.cs
@@ -459,7 +459,7 @@ Swift s3api не поддерживает весь S3-функционал, а L
 ### Загрузка
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/files \
+curl -X POST http://localhost:8090/api/files \
   -F "file=@hello.txt" \
   -F 'metadata={"originalName":"hello.txt","contentType":"text/plain","description":"greeting","tags":{"kind":"demo"}}'
 ```
@@ -493,7 +493,7 @@ multipart-части.
 ### Получение файла
 
 ```bash
-curl -OJ http://localhost:8090/api/v1/files/{fileId}
+curl -OJ http://localhost:8090/api/files/{fileId}
 ```
 
 Ответ: бинарный поток с `Content-Type`, `Content-Disposition`, `Content-Length`
@@ -505,7 +505,7 @@ curl -OJ http://localhost:8090/api/v1/files/{fileId}
 ### Получение метаданных
 
 ```bash
-curl http://localhost:8090/api/v1/files/{fileId}/metadata
+curl http://localhost:8090/api/files/{fileId}/metadata
 ```
 
 Метаданные доступны для статусов `Pending`, `Ready`, `Deleting`, `Failed`,
@@ -514,7 +514,7 @@ curl http://localhost:8090/api/v1/files/{fileId}/metadata
 ### Удаление
 
 ```bash
-curl -X DELETE http://localhost:8090/api/v1/files/{fileId}
+curl -X DELETE http://localhost:8090/api/files/{fileId}
 ```
 
 - `204 No Content` — объект удалён, строка переведена в `Deleted`.
@@ -530,7 +530,7 @@ worker. `0` — хранить бессрочно.
 ### Список файлов
 
 ```bash
-curl 'http://localhost:8090/api/v1/files?page=1&pageSize=50&status=Ready&sort=-createdAt'
+curl 'http://localhost:8090/api/files?page=1&pageSize=50&status=Ready&sort=-createdAt'
 ```
 
 Фильтры:
@@ -556,7 +556,7 @@ curl 'http://localhost:8090/api/v1/files?page=1&pageSize=50&status=Ready&sort=-c
 ### HEAD
 
 ```bash
-curl -I http://localhost:8090/api/v1/files/{fileId}
+curl -I http://localhost:8090/api/files/{fileId}
 ```
 
 Возвращает `Content-Type`, `Content-Length`, `ETag` без тела. Если файл не
@@ -565,7 +565,7 @@ curl -I http://localhost:8090/api/v1/files/{fileId}
 ### Изменение описания
 
 ```bash
-curl -X PATCH http://localhost:8090/api/v1/files/{fileId}/metadata \
+curl -X PATCH http://localhost:8090/api/files/{fileId}/metadata \
   -H 'Content-Type: application/json' \
   -d '{"originalName":"new.png","description":"новое описание","tags":{"kind":"avatar"}}'
 ```
@@ -578,7 +578,7 @@ curl -X PATCH http://localhost:8090/api/v1/files/{fileId}/metadata \
 ### Копирование
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/files/{fileId}/copy \
+curl -X POST http://localhost:8090/api/files/{fileId}/copy \
   -H 'Content-Type: application/json' \
   -d '{"originalName":"copy.png","description":"копия"}'
 ```
@@ -588,7 +588,7 @@ curl -X POST http://localhost:8090/api/v1/files/{fileId}/copy \
 ### Массовое удаление
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/files/bulk-delete \
+curl -X POST http://localhost:8090/api/files/bulk-delete \
   -H 'Content-Type: application/json' \
   -d '{"fileIds":["..."],"continueOnError":true}'
 ```
@@ -604,7 +604,7 @@ S3-авторизация остаются внутри сервиса; клие
 1. Начать загрузку:
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/uploads \
+curl -X POST http://localhost:8090/api/uploads \
   -H 'Content-Type: application/json' \
   -d '{"originalName":"big.bin","contentType":"application/octet-stream","description":"большой файл"}'
 ```
@@ -627,7 +627,7 @@ curl -X POST http://localhost:8090/api/v1/uploads \
 2. Загрузить часть:
 
 ```bash
-curl -X PUT http://localhost:8090/api/v1/uploads/{uploadId}/parts/1 \
+curl -X PUT http://localhost:8090/api/uploads/{uploadId}/parts/1 \
   -H 'Content-Type: application/octet-stream' \
   --data-binary @part1.bin
 ```
@@ -639,13 +639,13 @@ curl -X PUT http://localhost:8090/api/v1/uploads/{uploadId}/parts/1 \
 3. Посмотреть статус и части:
 
 ```bash
-curl http://localhost:8090/api/v1/uploads/{uploadId}
+curl http://localhost:8090/api/uploads/{uploadId}
 ```
 
 4. Завершить:
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/complete
+curl -X POST http://localhost:8090/api/uploads/{uploadId}/complete
 ```
 
 Ответ `201 Created` с обычными метаданными файла. Сервис проверяет размер,
@@ -654,13 +654,13 @@ curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/complete
 5. Прервать загрузку:
 
 ```bash
-curl -X DELETE http://localhost:8090/api/v1/uploads/{uploadId}
+curl -X DELETE http://localhost:8090/api/uploads/{uploadId}
 ```
 
 или:
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/abort
+curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 ```
 
 Оба варианта вызывают `AbortMultipartUpload` в S3. Повторный abort уже
@@ -681,7 +681,7 @@ curl -X POST http://localhost:8090/api/v1/uploads/{uploadId}/abort
   "title": "File not found",
   "status": 404,
   "detail": "The requested file does not exist or was deleted.",
-  "instance": "/api/v1/files/...",
+  "instance": "/api/files/...",
   "traceId": "0HNA..."
 }
 ```
@@ -880,7 +880,7 @@ audit_events
   файла; имя файла целиком в ключ не попадает. Старые объекты, загруженные до
   этого изменения, остаются без расширения в ключе.
 - До 64 MiB — обычный `PutObject`, больше — multipart с частью 16 MiB.
-- Для больших файлов доступны явные multipart-сессии: `POST /api/v1/uploads`,
+- Для больших файлов доступны явные multipart-сессии: `POST /api/uploads`,
   части, complete/abort. S3 upload id наружу не отдаётся.
 - При ошибке multipart вызывается `AbortMultipartUpload`.
 - Истёкшие multipart-сессии и S3 upload старше
@@ -923,17 +923,17 @@ multipart upload размером 6 MiB и явные multipart-сессии.
 | Кто пишет в S3 | Только этот сервис |
 | Аутентификация клиентов | Не реализована; сервис для доверенного внутреннего контура |
 | Что такое `version` | Бизнес-версия, сейчас всегда `1`; версия S3-объекта хранится отдельно в `s3_version_id` |
-| Базовый путь | `/api/v1/files`, `/api/v1/uploads`, `/api/v1/storage` |
+| Базовый путь | `/api/files`, `/api/uploads`, `/api/storage` |
 | Формат загрузки | `multipart/form-data` для простой; бинарные части для явного multipart |
 | Формат метаданных и ошибок | JSON; ошибки — RFC 9457 ProblemDetails |
 | Формат содержимого | Бинарный поток, без base64 |
 | Удаление | Soft delete в Postgres + удаление объекта из S3; ответ 204/202 |
 | Повторное удаление | Идемпотентно: 204, если уже удалён |
 | Перезапись | Нет: каждый upload создаёт новый `fileId` |
-| Листинг | Есть: `GET /api/v1/files` с фильтрами и страницами |
+| Листинг | Есть: `GET /api/files` с фильтрами и страницами |
 | Range, presigned URL, S3 versioning | Нет |
 | Максимальный размер | 1 GiB, настраивается |
-| Multipart | Автоматический для простой загрузки >64 MiB и явные сессии `/api/v1/uploads` |
+| Multipart | Автоматический для простой загрузки >64 MiB и явные сессии `/api/uploads` |
 | Один инстанс или несколько | Несколько инстансов безопасны: сверка берёт Postgres advisory lock |
 
 ## Осознанные ограничения
