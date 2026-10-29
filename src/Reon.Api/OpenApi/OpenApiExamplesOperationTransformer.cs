@@ -211,8 +211,8 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Скачать файл";
         operation.Description =
-            "Возвращает содержимое файла бинарным потоком. Для получения файла " +
-            "нужен только fileId из ответа загрузки.";
+            "Возвращает содержимое файла бинарным потоком. Для скачивания достаточно " +
+            "идентификатора файла (fileId) из ответа загрузки.";
 
         SetParameterExample(operation, "fileId", FileIdExample);
     }
@@ -264,7 +264,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Список файлов";
         operation.Description =
             "Возвращает страницу файлов с фильтрами по статусу, типу, имени и дате создания. " +
-            "Максимальный pageSize — 200.";
+            "Максимальный размер страницы (pageSize) — 200.";
         SetJsonExample(
             operation,
             "200",
@@ -292,7 +292,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Заголовки файла";
         operation.Description =
             "Возвращает Content-Type, Content-Length и ETag без тела файла. " +
-            "Для файла не в статусе Ready — 409.";
+            "Если файл не в состоянии Ready, возвращается 409.";
         SetParameterExample(operation, "fileId", FileIdExample);
     }
 
@@ -300,7 +300,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Изменить описание файла";
         operation.Description =
-            "Меняет originalName, description и tags. null или отсутствующее поле " +
+            "Меняет originalName, description и tags. Значение null или отсутствующее поле " +
             "оставляет значение без изменений; пустая строка очищает description, {} очищает tags.";
         SetParameterExample(operation, "fileId", FileIdExample);
         SetJsonRequestBodyExample(
@@ -319,7 +319,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Скопировать файл";
         operation.Description =
-            "Создаёт новый fileId и копирует объект в S3 и описание в PostgreSQL.";
+            "Создаёт новый идентификатор файла (fileId) и копирует объект в S3 и описание в PostgreSQL.";
         SetParameterExample(operation, "fileId", FileIdExample);
         SetJsonRequestBodyExample(
             operation,
@@ -369,7 +369,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Начать параллельную загрузку файла по частям";
         operation.Description =
-            "Создаёт сессию загрузки. S3 upload id остаётся внутри сервиса; " +
+            "Создаёт сессию загрузки. Идентификатор загрузки S3 остаётся внутри сервиса; " +
             "клиент использует uploadId, partSize и expiresAt.";
         SetJsonRequestBodyExample(
             operation,
@@ -426,7 +426,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Прервать параллельную загрузку файла по частям";
         operation.Description =
-            "Вызывает AbortMultipartUpload в S3. Повторный abort идемпотентен.";
+            "Вызывает AbortMultipartUpload в S3. Повторное прерывание идемпотентно.";
         SetParameterExample(operation, "uploadId", FileIdExample);
     }
 

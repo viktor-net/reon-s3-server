@@ -42,7 +42,8 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Создать бакет</summary>
-    /// <remarks>Создаёт бакет и его административные настройки: версионирование, Object Lock и квоту.</remarks>
+    /// <remarks>Создаёт бакет и его административные настройки: версионирование,
+    /// блокировку объектов (Object Lock) и квоту.</remarks>
     [HttpPost]
     [ProducesResponseType<BucketSummaryResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -66,7 +67,8 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Детали бакета</summary>
-    /// <remarks>Версионирование, Object Lock, шифрование, квота и использование.</remarks>
+    /// <remarks>Версионирование, блокировка объектов (Object Lock), шифрование,
+    /// квота и использование.</remarks>
     [HttpGet("{bucket}")]
     [ProducesResponseType<BucketSummaryResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -80,7 +82,8 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Изменить бакет</summary>
-    /// <remarks>Обновляет версионирование и квоту. Object Lock нельзя изменить после создания.</remarks>
+    /// <remarks>Обновляет версионирование и квоту. Блокировку объектов нельзя
+    /// изменить после создания.</remarks>
     [HttpPatch("{bucket}")]
     [ProducesResponseType<BucketSummaryResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -103,7 +106,7 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Режим доступа</summary>
-    /// <remarks>Текущий режим анонимного доступа и документ bucket policy.</remarks>
+    /// <remarks>Текущий режим анонимного доступа и документ политики бакета.</remarks>
     [HttpGet("{bucket}/access")]
     [ProducesResponseType<BucketAccessResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -116,7 +119,9 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Изменить режим доступа</summary>
-    /// <remarks>Устанавливает анонимный доступ: private или public-read. Публичное чтение реализуется bucket policy с правом s3:GetObject.</remarks>
+    /// <remarks>Устанавливает анонимный доступ: закрытый (private) или публичный
+    /// на чтение (public-read). Публичное чтение реализуется политикой бакета
+    /// с правом s3:GetObject.</remarks>
     [HttpPut("{bucket}/access")]
     [ProducesResponseType<BucketAccessResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -136,8 +141,8 @@ public sealed class AdminBucketsController(
         return Ok(new BucketAccessResponse(access.Mode.ToString(), access.Policy));
     }
 
-    /// <summary>Lifecycle-правила</summary>
-    /// <remarks>Правила lifecycle, настроенные на бакете.</remarks>
+    /// <summary>Правила жизненного цикла</summary>
+    /// <remarks>Правила жизненного цикла, настроенные на бакете.</remarks>
     [HttpGet("{bucket}/lifecycle")]
     [ProducesResponseType<BucketLifecycleResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -149,8 +154,8 @@ public sealed class AdminBucketsController(
         return Ok(new BucketLifecycleResponse(rules.Select(rule => rule.ToResponse()).ToArray()));
     }
 
-    /// <summary>Изменить lifecycle</summary>
-    /// <remarks>Заменяет конфигурацию lifecycle бакета.</remarks>
+    /// <summary>Изменить правила жизненного цикла</summary>
+    /// <remarks>Заменяет конфигурацию жизненного цикла бакета.</remarks>
     [HttpPut("{bucket}/lifecycle")]
     [ProducesResponseType<BucketLifecycleResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -203,7 +208,8 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Создать папку</summary>
-    /// <remarks>Создаёт пустой префикс-маркер, чтобы папка была видна в браузере объектов. Настоящих каталогов в S3 нет.</remarks>
+    /// <remarks>Создаёт пустой объект-маркер, чтобы папка была видна в браузере
+    /// объектов. Настоящих каталогов в S3 нет.</remarks>
     [HttpPost("{bucket}/folders")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]

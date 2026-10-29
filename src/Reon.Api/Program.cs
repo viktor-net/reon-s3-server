@@ -15,14 +15,15 @@ builder.Services.AddOpenApi(options =>
         document.Info.Title = "Reon S3 Server";
         document.Info.Description =
             "Сервис хранения файлов и учёта их описаний.\n\n" +
-            "Базовый API (Files, Uploads, Storage) работает с " +
-            "файловым доменом в одном бакете, административный фасад (Admin) — " +
-            "со всеми бакетами S3: сырыми объектами, версиями, квотами и журналом.";
+            "Базовый API (разделы Files, Uploads и Storage) работает с " +
+            "файловым доменом в одном бакете; административный фасад (раздел Admin) " +
+            "охватывает все бакеты S3: сырые объекты, версии, квоты и журнал операций.";
         return Task.CompletedTask;
     });
     options.AddDocumentTransformer<OpenApiTagDescriptionsTransformer>();
     options.AddDocumentTransformer<OpenApiQueryOperationTransformer>();
     options.AddOperationTransformer<OpenApiExamplesOperationTransformer>();
+    options.AddOperationTransformer<OpenApiTextTransformer>();
 });
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -87,6 +88,8 @@ app.MapScalarApiReference(options =>
 {
     options
         .WithTitle("Reon S3 Server")
+        // Русская локаль переводит подписи Scalar и встроенные описания схем.
+        .WithLocalization(new ScalarLocalizationOptions { Locale = "ru" })
         // Убираем продвижение Scalar: CTA "Generate SDKs & MCP",
         // кнопку клиента и чат Agent Scalar ("Ask AI").
         .DisableMcp()

@@ -21,7 +21,9 @@ public sealed class AdminObjectsController(
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
     /// <summary>Список объектов</summary>
-    /// <remarks>Объекты и «папки» (общие префиксы) внутри префикса. В S3 нет поиска по подстроке: при search сервис просматривает до Admin:MaxSearchObjects объектов и фильтрует их в памяти.</remarks>
+    /// <remarks>Объекты и «папки» (общие префиксы) внутри префикса. В S3 нет поиска
+    /// по подстроке: при поиске (search) сервис просматривает до
+    /// Admin:MaxSearchObjects объектов и фильтрует их в памяти.</remarks>
     [HttpGet]
     [ProducesResponseType<ObjectListingResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -238,7 +240,7 @@ public sealed class AdminObjectsController(
     }
 
     /// <summary>Версии объекта</summary>
-    /// <remarks>Все версии объекта, включая delete markers.</remarks>
+    /// <remarks>Все версии объекта, включая маркеры удаления.</remarks>
     [HttpGet("{key}/versions")]
     [ProducesResponseType<ObjectVersionsResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -269,7 +271,8 @@ public sealed class AdminObjectsController(
     }
 
     /// <summary>Теги объекта</summary>
-    /// <remarks>Теги — отдельная сущность, не путать с пользовательскими метаданными.</remarks>
+    /// <remarks>Теги — отдельная сущность; не путайте их с пользовательскими
+    /// метаданными.</remarks>
     [HttpGet("{key}/tags")]
     [ProducesResponseType<Dictionary<string, string>>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -307,7 +310,7 @@ public sealed class AdminObjectsController(
         return Ok(request.Tags);
     }
 
-    /// <summary>Presigned URL</summary>
+    /// <summary>Подписанная ссылка</summary>
     /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание. Это безопасный запрос: объект не меняется, поэтому используется метод QUERY (RFC 10008), а срок жизни передаётся телом.</remarks>
     [HttpQuery("{key}/presigned-urls")]
     [ProducesResponseType<PresignedUrlResponse>(StatusCodes.Status200OK)]

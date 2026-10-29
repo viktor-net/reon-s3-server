@@ -14,7 +14,9 @@ public sealed class AdminOverviewController(
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
     /// <summary>Обзор хранилища</summary>
-    /// <remarks>Бакеты, объекты, объём, публичные бакеты и использование по каждому бакету. Использование кешируется; refreshUsage=true пересчитывает его по объектному хранилищу.</remarks>
+    /// <remarks>Бакеты, объекты, объём, публичные бакеты и использование по каждому
+    /// бакету. Использование хранится в кеше; refreshUsage=true запускает пересчёт
+    /// по объектному хранилищу.</remarks>
     [HttpGet]
     [ProducesResponseType<AdminOverviewResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<AdminOverviewResponse>> Get(

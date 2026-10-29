@@ -52,7 +52,7 @@ public sealed class OpenApiQueryOperationTransformer : IOpenApiDocumentTransform
 
         var operation = new OpenApiOperation
         {
-            Summary = "Presigned URL",
+            Summary = "Подписанная ссылка",
             Description =
                 "Создаёт временную подписанную ссылку на прямое скачивание. " +
                 "Это безопасный запрос: объект не меняется, поэтому используется " +

@@ -14,7 +14,8 @@ public sealed class AdminAuditController(
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
     /// <summary>Журнал операций</summary>
-    /// <remarks>Административные и файловые операции: актор, ресурс, результат и необязательные JSON-детали.</remarks>
+    /// <remarks>Административные и файловые операции: исполнитель, ресурс,
+    /// результат и необязательные JSON-детали.</remarks>
     [HttpGet]
     [ProducesResponseType<AuditListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
