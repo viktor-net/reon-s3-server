@@ -12,6 +12,7 @@ public sealed partial class FileStorageService
     private readonly ITempFileFactory _tempFiles;
     private readonly IClock _clock;
     private readonly FileStorageOptions _options;
+    private readonly IStorageQuotaGuard _quotaGuard;
     private readonly ILogger<FileStorageService> _logger;
 
     public FileStorageService(
@@ -20,6 +21,7 @@ public sealed partial class FileStorageService
         ITempFileFactory tempFiles,
         IClock clock,
         IOptions<FileStorageOptions> options,
+        IStorageQuotaGuard quotaGuard,
         ILogger<FileStorageService> logger)
     {
         _objectStorage = objectStorage;
@@ -27,6 +29,7 @@ public sealed partial class FileStorageService
         _tempFiles = tempFiles;
         _clock = clock;
         _options = options.Value;
+        _quotaGuard = quotaGuard;
         _logger = logger;
     }
 
@@ -49,6 +52,10 @@ public sealed partial class FileStorageService
         // Spooling gives us a seekable stream (S3 retries and multipart need it),
         // a known size, and a checksum before any metadata becomes visible.
         await using var tempFile = await _tempFiles.CreateAsync(content, _options.MaxFileSizeBytes, cancellationToken);
+
+        // Quota is checked before the metadata row appears, so a rejected
+        // upload leaves nothing behind.
+        await _quotaGuard.EnsureCanWriteAsync(_objectStorage.BucketName, tempFile.Size, cancellationToken);
 
         var now = _clock.UtcNow;
         var file = FileMetadata.CreatePending(

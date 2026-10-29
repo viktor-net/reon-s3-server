@@ -27,6 +27,7 @@ public sealed class FileStorageServiceTests
             new TemporaryFileFactory(),
             _clock,
             options,
+            new FakeStorageQuotaGuard(),
             NullLogger<FileStorageService>.Instance);
     }
 
@@ -118,9 +119,39 @@ public sealed class FileStorageServiceTests
             new TemporaryFileFactory(),
             _clock,
             options,
+            new FakeStorageQuotaGuard(),
             NullLogger<FileStorageService>.Instance);
 
         await Assert.ThrowsAsync<FileTooLargeException>(() =>
+            service.UploadAsync(
+                new MemoryStream("12345"u8.ToArray()),
+                new UploadFileCommand("big.bin", null, null, null),
+                CancellationToken.None));
+
+        Assert.Empty(_repository.Files);
+    }
+
+    [Fact]
+    public async Task UploadAsync_WhenQuotaExceeded_ThrowsAndCreatesNoMetadata()
+    {
+        var options = Options.Create(
+            new FileStorageOptions
+            {
+                MaxFileSizeBytes = 1024 * 1024,
+                MultipartThresholdBytes = 5 * 1024 * 1024,
+                MultipartPartSizeBytes = 5 * 1024 * 1024,
+            });
+
+        var service = new FileStorageService(
+            _storage,
+            _repository,
+            new TemporaryFileFactory(),
+            _clock,
+            options,
+            new FakeStorageQuotaGuard { QuotaBytes = 4 },
+            NullLogger<FileStorageService>.Instance);
+
+        await Assert.ThrowsAsync<QuotaExceededException>(() =>
             service.UploadAsync(
                 new MemoryStream("12345"u8.ToArray()),
                 new UploadFileCommand("big.bin", null, null, null),

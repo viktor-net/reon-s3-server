@@ -5,7 +5,9 @@ namespace Reon.Api.Controllers;
 [Produces("application/json")]
 public sealed class UploadsController(
     IMultipartUploadService uploads,
-    IOptions<FileStorageOptions> options) : ControllerBase
+    IStorageAuditor auditor,
+    IOptions<FileStorageOptions> options,
+    IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
     [HttpPost]
     [ProducesResponseType<MultipartUploadResponse>(StatusCodes.Status201Created)]
@@ -15,11 +17,28 @@ public sealed class UploadsController(
         [FromBody] InitiateMultipartUploadRequest request,
         CancellationToken cancellationToken)
     {
-        var upload = await uploads.InitiateAsync(
-            request.OriginalName,
-            request.ContentType,
-            request.Description,
-            request.Tags,
+        Reon.Core.Entities.MultipartUpload upload;
+        try
+        {
+            upload = await uploads.InitiateAsync(
+                request.OriginalName,
+                request.ContentType,
+                request.Description,
+                request.Tags,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("upload.begin", "uploads", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "upload.begin",
+            $"upload/{upload.Id}",
+            AuditResult.Success,
+            StatusCodes.Status201Created,
+            new { upload.OriginalName, upload.ContentType },
             cancellationToken);
 
         var response = ToResponse(upload, []);
@@ -98,7 +117,25 @@ public sealed class UploadsController(
         Guid uploadId,
         CancellationToken cancellationToken)
     {
-        var file = await uploads.CompleteAsync(uploadId, cancellationToken);
+        FileMetadata file;
+        try
+        {
+            file = await uploads.CompleteAsync(uploadId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("upload.complete", $"upload/{uploadId}", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "upload.complete",
+            $"upload/{uploadId}",
+            AuditResult.Success,
+            StatusCodes.Status201Created,
+            new { fileId = file.Id, file.Size },
+            cancellationToken);
+
         return Created($"/api/v1/files/{file.Id}", FileMetadataResponse.FromEntity(file));
     }
 
@@ -111,7 +148,24 @@ public sealed class UploadsController(
         Guid uploadId,
         CancellationToken cancellationToken)
     {
-        await uploads.AbortAsync(uploadId, cancellationToken);
+        try
+        {
+            await uploads.AbortAsync(uploadId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("upload.abort", $"upload/{uploadId}", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "upload.abort",
+            $"upload/{uploadId}",
+            AuditResult.Success,
+            StatusCodes.Status204NoContent,
+            null,
+            cancellationToken);
+
         return NoContent();
     }
 
@@ -124,7 +178,24 @@ public sealed class UploadsController(
         Guid uploadId,
         CancellationToken cancellationToken)
     {
-        await uploads.AbortAsync(uploadId, cancellationToken);
+        try
+        {
+            await uploads.AbortAsync(uploadId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("upload.abort", $"upload/{uploadId}", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "upload.abort",
+            $"upload/{uploadId}",
+            AuditResult.Success,
+            StatusCodes.Status204NoContent,
+            null,
+            cancellationToken);
+
         return NoContent();
     }
 

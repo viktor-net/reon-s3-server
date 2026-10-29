@@ -31,6 +31,7 @@ public sealed class MultipartUploadServiceTests
             new TemporaryFileFactory(),
             _clock,
             options,
+            new FakeStorageQuotaGuard(),
             NullLogger<MultipartUploadService>.Instance);
     }
 

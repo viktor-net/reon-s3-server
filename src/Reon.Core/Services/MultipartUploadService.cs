@@ -15,6 +15,7 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
     private readonly ITempFileFactory _tempFiles;
     private readonly IClock _clock;
     private readonly FileStorageOptions _options;
+    private readonly IStorageQuotaGuard _quotaGuard;
     private readonly ILogger<MultipartUploadService> _logger;
 
     public MultipartUploadService(
@@ -24,6 +25,7 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
         ITempFileFactory tempFiles,
         IClock clock,
         IOptions<FileStorageOptions> options,
+        IStorageQuotaGuard quotaGuard,
         ILogger<MultipartUploadService> logger)
     {
         _objectStorage = objectStorage;
@@ -32,6 +34,7 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
         _tempFiles = tempFiles;
         _clock = clock;
         _options = options.Value;
+        _quotaGuard = quotaGuard;
         _logger = logger;
     }
 
@@ -208,6 +211,12 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
             .ToArray();
 
         ValidateParts(parts);
+
+        await _quotaGuard.EnsureCanWriteAsync(
+            upload.Bucket,
+            parts.Sum(part => part.Size),
+            cancellationToken);
+
         upload.BeginComplete(now);
         await _uploadRepository.SaveChangesAsync(cancellationToken);
 

@@ -2,7 +2,10 @@ namespace Reon.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/files")]
-public sealed class FilesController(FileStorageService fileStorage) : ControllerBase
+public sealed class FilesController(
+    FileStorageService fileStorage,
+    IStorageAuditor auditor,
+    IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
     [HttpPost]
     [Consumes("multipart/form-data")]
@@ -43,9 +46,27 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
             Tags: metadata?.Tags);
 
         await using var stream = request.File.OpenReadStream();
-        var file = await fileStorage.UploadAsync(
-            stream,
-            command,
+
+        FileMetadata file;
+        try
+        {
+            file = await fileStorage.UploadAsync(
+                stream,
+                command,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("file.upload", "files", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "file.upload",
+            $"file/{file.Id}",
+            AuditResult.Success,
+            StatusCodes.Status201Created,
+            new { file.Size, file.ContentType },
             cancellationToken);
 
         var response = FileMetadataResponse.FromEntity(file);
@@ -119,11 +140,28 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
         [FromBody] UpdateFileMetadataRequest request,
         CancellationToken cancellationToken)
     {
-        var file = await fileStorage.UpdateMetadataAsync(
-            fileId,
-            request.OriginalName,
-            request.Description,
-            request.Tags,
+        FileMetadata file;
+        try
+        {
+            file = await fileStorage.UpdateMetadataAsync(
+                fileId,
+                request.OriginalName,
+                request.Description,
+                request.Tags,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("file.metadata.update", $"file/{fileId}", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "file.metadata.update",
+            $"file/{fileId}",
+            AuditResult.Success,
+            StatusCodes.Status200OK,
+            null,
             cancellationToken);
 
         return Ok(FileMetadataResponse.FromEntity(file));
@@ -140,9 +178,26 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
         [FromBody] CopyFileRequest request,
         CancellationToken cancellationToken)
     {
-        var copy = await fileStorage.CopyAsync(
-            fileId,
-            new CopyFileCommand(request.OriginalName, request.Description, request.Tags),
+        FileMetadata copy;
+        try
+        {
+            copy = await fileStorage.CopyAsync(
+                fileId,
+                new CopyFileCommand(request.OriginalName, request.Description, request.Tags),
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("file.copy", $"file/{fileId}", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "file.copy",
+            $"file/{copy.Id}",
+            AuditResult.Success,
+            StatusCodes.Status201Created,
+            new { sourceFileId = fileId },
             cancellationToken);
 
         return Created($"/api/v1/files/{copy.Id}", FileMetadataResponse.FromEntity(copy));
@@ -203,6 +258,18 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
             }
         }
 
+        await AuditAsync(
+            "file.bulk-delete",
+            "files",
+            AuditResult.Success,
+            StatusCodes.Status200OK,
+            new
+            {
+                total = results.Count,
+                failed = results.Count(item => item.Status == "Failed"),
+            },
+            cancellationToken);
+
         return Ok(new BulkDeleteResponse(results));
     }
 
@@ -254,8 +321,27 @@ public sealed class FilesController(FileStorageService fileStorage) : Controller
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<IActionResult> Delete(Guid fileId, CancellationToken cancellationToken)
     {
-        var outcome = await fileStorage.DeleteAsync(
-            fileId,
+        DeleteOutcome outcome;
+        try
+        {
+            outcome = await fileStorage.DeleteAsync(fileId, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("file.delete", $"file/{fileId}", exception, cancellationToken);
+            throw;
+        }
+
+        var statusCode = outcome == DeleteOutcome.InProgress
+            ? StatusCodes.Status202Accepted
+            : StatusCodes.Status204NoContent;
+
+        await AuditAsync(
+            "file.delete",
+            $"file/{fileId}",
+            AuditResult.Success,
+            statusCode,
+            new { outcome = outcome.ToString() },
             cancellationToken);
 
         return outcome == DeleteOutcome.InProgress
