@@ -797,6 +797,20 @@ dotnet ef database update \
 В Development `Database:AutoMigrate=true`, поэтому при обычном запуске миграции
 применяются автоматически. В production лучше выполнять их отдельным шагом.
 
+### Демо-данные
+
+Заполнить локальный стенд демо-данными ИС РЕОН (реестровые дела, выписки,
+техпланы, фотофиксация, выгрузки для смежных систем):
+
+```bash
+bash scripts/seed/seed.sh          # Windows: pwsh -File scripts/seed/seed.ps1
+bash scripts/seed/clean.sh         # удалить только демо-данные
+```
+
+Скрипт повторяет порядок записи сервиса (`Pending` → объект в S3 → `Ready`)
+и не ломает сверку. Подробности и источники по предметке — в
+`scripts/seed/README.md`.
+
 ## База данных
 
 Таблица `files` (snake_case):
