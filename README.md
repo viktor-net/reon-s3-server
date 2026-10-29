@@ -46,6 +46,7 @@
 - `GET /api/v1/files/{fileId}/metadata` — получение метаданных в JSON.
 - `DELETE /api/v1/files/{fileId}` — удаление файла.
 - OpenAPI + Scalar UI.
+- У методов OpenAPI есть описания и примеры запросов/ответов.
 - Фоновая сверка Postgres и S3, очистка orphan-объектов и незавершённых multipart upload.
 - Health checks `/health/live` и `/health/ready`.
 
@@ -95,6 +96,8 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   ├── Health/
 │   │   │   ├── PostgresHealthCheck.cs
 │   │   │   └── S3HealthCheck.cs
+│   │   ├── OpenApi/
+│   │   │   └── OpenApiExamplesOperationTransformer.cs # описания и примеры методов
 │   │   ├── Properties/
 │   │   │   └── launchSettings.json        # профиль запуска и автозапуск Scalar
 │   │   ├── appsettings.json               # общие настройки без секретов

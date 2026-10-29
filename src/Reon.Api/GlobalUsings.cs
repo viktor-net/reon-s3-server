@@ -11,6 +11,7 @@ global using Microsoft.Extensions.Options;
 global using Reon.Api.Contracts;
 global using Reon.Api.Errors;
 global using Reon.Api.Health;
+global using Reon.Api.OpenApi;
 global using Reon.Core.Entities;
 global using Reon.Core.Exceptions;
 global using Reon.Core.Interfaces;
