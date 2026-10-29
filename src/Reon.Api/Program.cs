@@ -72,7 +72,18 @@ app.MapControllers();
 app.MapOpenApi();
 app.MapScalarApiReference(options =>
 {
-    options.WithTitle("Reon S3 Server");
+    options
+        .WithTitle("Reon S3 Server")
+        // Убираем продвижение Scalar: CTA "Generate SDKs & MCP",
+        // кнопку клиента и чат Agent Scalar ("Ask AI").
+        .DisableMcp()
+        .HideClientButton()
+        .DisableAgent()
+        // Скрывает всю панель developer tools (Developer Tools, Configure,
+        // Share, Deploy, Generate SDK).
+        .HideDeveloperTools()
+        // Штатной опции для подписи "Powered by Scalar" нет — гасим её CSS.
+        .WithCustomCss("a[href*=\"utm_source=powered-by\"]{display:none!important}");
 });
 
 // Scalar resolves its OpenAPI source relative to the UI URL. Keep aliases for
