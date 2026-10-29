@@ -97,6 +97,13 @@ app.MapScalarApiReference(options =>
         // Скрывает всю панель developer tools: Developer Tools, Configure,
         // Share, Deploy, Generate SDK — это подписи пунктов меню Scalar.
         .HideDeveloperTools()
+        // Порядок вкладок Client Libraries: shell, затем языки проекта.
+        // Остальные клиенты остаются под кнопкой More.
+        .WithFeaturedClients(
+            new(ScalarTarget.Shell, ScalarClient.Curl),
+            new(ScalarTarget.JavaScript, ScalarClient.Fetch),
+            new(ScalarTarget.CSharp, ScalarClient.HttpClient),
+            new(ScalarTarget.Java, ScalarClient.OkHttp))
         // Штатной опции для подписи "Powered by Scalar" нет — гасим её CSS.
         // Заодно снимаем обрезку описаний групп и операций: по умолчанию Scalar
         // показывает только 7 строк и не даёт их раскрыть.
