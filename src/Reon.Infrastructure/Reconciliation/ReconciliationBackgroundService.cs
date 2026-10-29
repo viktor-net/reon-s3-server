@@ -44,7 +44,7 @@ public sealed partial class ReconciliationBackgroundService(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Normal shutdown.
+            // Штатное завершение.
         }
         catch (Exception exception)
         {

@@ -35,7 +35,7 @@ public sealed partial class OrphanSweepBackgroundService(
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                // Normal shutdown.
+                // Штатное завершение.
             }
             catch (Exception exception)
             {

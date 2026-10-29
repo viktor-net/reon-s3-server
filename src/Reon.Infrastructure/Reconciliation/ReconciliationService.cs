@@ -4,10 +4,10 @@ using System.Data.Common;
 namespace Reon.Infrastructure.Reconciliation;
 
 /// <summary>
-/// Repairs the two divergence directions:
-/// metadata row without an object, and object without a metadata row.
-/// It never recreates missing bytes; it only records the loss and lets the
-/// operator restore from a backup or S3 versioning.
+/// Устраняет расхождения в двух направлениях:
+/// строка метаданных без объекта и объект без строки метаданных.
+/// Сервис не восстанавливает байты; он только фиксирует потерю и оставляет
+/// оператору восстановление из резервной копии или версионирования S3.
 /// </summary>
 public sealed partial class ReconciliationService : IReconciliationService
 {
@@ -164,8 +164,8 @@ public sealed partial class ReconciliationService : IReconciliationService
 
             try
             {
-                // ListObjectsV2 does not return user metadata. Verify that the
-                // object was written by this service before deleting it.
+                // ListObjectsV2 не возвращает пользовательские метаданные. Проверяем,
+                // что объект записан этим сервисом, прежде чем удалять его.
                 var head = await _objectStorage.HeadAsync(item.ObjectKey, cancellationToken);
                 if (head is null)
                 {

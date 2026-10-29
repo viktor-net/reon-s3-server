@@ -3,9 +3,9 @@
 namespace Reon.Infrastructure.Persistence;
 
 /// <summary>
-/// Persists audit entries and mirrors them into the administrative event
-/// stream. Failures are logged and swallowed: auditing never masks the result
-/// of the operation being recorded.
+/// Сохраняет записи аудита и дублирует их в поток административных событий.
+/// Ошибки логируются и подавляются: аудит никогда не подменяет результат
+/// записываемой операции.
 /// </summary>
 public sealed partial class StorageAuditor(
     IAuditRepository repository,

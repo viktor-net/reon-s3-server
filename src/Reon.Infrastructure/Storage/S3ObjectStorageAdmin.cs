@@ -8,9 +8,9 @@ using CoreLifecycleRule = Reon.Core.Models.LifecycleRule;
 namespace Reon.Infrastructure.Storage;
 
 /// <summary>
-/// Administrative S3 operations across buckets. Capabilities that are optional
-/// for S3-compatible providers (bucket policy, lifecycle, object lock) degrade
-/// gracefully on read and raise a domain exception on write when unsupported.
+/// Административные операции S3 по всем бакетам. Необязательные для
+/// S3-совместимых провайдеров возможности (bucket policy, lifecycle, object lock)
+/// на чтении деградируют, а на записи выбрасывают доменное исключение.
 /// </summary>
 public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
 {
@@ -116,7 +116,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
-            // Idempotent delete.
+            // Идемпотентное удаление.
         }
         catch (AmazonS3Exception exception)
         {
@@ -513,7 +513,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
-            // Deleting a missing object is idempotent.
+            // Удаление отсутствующего объекта идемпотентно.
         }
         catch (AmazonS3Exception exception)
         {

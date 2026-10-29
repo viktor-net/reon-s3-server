@@ -33,7 +33,7 @@ public sealed partial class MultipartCleanupBackgroundService(
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                // Normal shutdown.
+                // Штатное завершение.
             }
             catch (Exception exception)
             {

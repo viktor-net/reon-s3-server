@@ -65,7 +65,7 @@ public sealed class TemporaryFileFactory : ITempFileFactory
         }
         catch (IOException)
         {
-            // Best-effort cleanup of a temp file.
+            // Best-effort очистка временного файла.
         }
     }
 }

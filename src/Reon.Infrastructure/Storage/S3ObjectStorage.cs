@@ -123,7 +123,7 @@ public sealed partial class S3ObjectStorage : IObjectStorage
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
-            // Idempotent delete.
+            // Идемпотентное удаление.
         }
         catch (AmazonS3Exception exception)
         {
@@ -273,7 +273,7 @@ public sealed partial class S3ObjectStorage : IObjectStorage
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
-            // Idempotent abort.
+            // Идемпотентное прерывание.
         }
         catch (AmazonS3Exception exception)
         {
@@ -379,8 +379,8 @@ public sealed partial class S3ObjectStorage : IObjectStorage
         }
         catch (AmazonS3Exception exception)
         {
-            // Not every S3-compatible provider implements ListMultipartUploads.
-            // In that case the per-upload abort in PutMultipartAsync remains the safety net.
+            // Не каждый S3-совместимый провайдер реализует ListMultipartUploads.
+            // В этом случае страховкой остаётся прерывание каждой загрузки в PutMultipartAsync.
             LogMultipartCleanupUnavailable(_logger, exception);
         }
     }
@@ -549,8 +549,8 @@ public sealed partial class S3ObjectStorage : IObjectStorage
 
         foreach (var rawKey in metadata.Keys)
         {
-            // S3 returns user metadata with the x-amz-meta- prefix; the rest of
-            // the application works with the bare key (e.g. reon-file-id).
+            // S3 возвращает пользовательские метаданные с префиксом x-amz-meta-;
+            // остальное приложение работает с ключом без префикса (например, reon-file-id).
             var key = rawKey.StartsWith("x-amz-meta-", StringComparison.OrdinalIgnoreCase)
                 ? rawKey["x-amz-meta-".Length..]
                 : rawKey;

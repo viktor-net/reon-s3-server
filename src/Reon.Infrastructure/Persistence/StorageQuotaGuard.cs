@@ -1,8 +1,8 @@
 namespace Reon.Infrastructure.Persistence;
 
 /// <summary>
-/// Quota guard over the administrative bucket settings. Usage comes from the
-/// object store through a short-lived cache, so the guard is best-effort.
+/// Проверка квоты по административным настройкам бакета. Использование берётся
+/// из объектного хранилища через короткий кеш, поэтому проверка приблизительная.
 /// </summary>
 public sealed class StorageQuotaGuard(
     IBucketSettingsRepository settings,

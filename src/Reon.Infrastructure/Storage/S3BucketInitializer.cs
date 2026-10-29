@@ -47,7 +47,7 @@ public sealed partial class S3BucketInitializer : IHostedService
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.Conflict)
         {
-            // Another instance created the bucket in parallel.
+            // Другой экземпляр создал бакет параллельно.
             LogBucketExists(_logger, _options.BucketName);
         }
         catch (AmazonS3Exception exception)

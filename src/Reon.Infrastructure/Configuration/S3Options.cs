@@ -4,7 +4,7 @@ public sealed class S3Options
 {
     public const string SectionName = "S3";
 
-    /// <summary>Base URL of the S3-compatible endpoint, e.g. http://localhost:8080.</summary>
+    /// <summary>Базовый URL S3-совместимого эндпоинта, например http://localhost:8080.</summary>
     public string ServiceUrl { get; set; } = "http://localhost:8080";
 
     public string AccessKey { get; set; } = string.Empty;
@@ -15,9 +15,9 @@ public sealed class S3Options
 
     public string BucketName { get; set; } = "reon-files";
 
-    /// <summary>Required for Swift s3api and MinIO. Keep true unless the provider requires virtual-host style.</summary>
+    /// <summary>Нужно для Swift s3api и MinIO. Оставлять true, если провайдер не требует virtual-host стиля.</summary>
     public bool ForcePathStyle { get; set; } = true;
 
-    /// <summary>Creates the bucket on startup when it does not exist.</summary>
+    /// <summary>Создаёт бакет при старте, если его нет.</summary>
     public bool EnsureBucket { get; set; } = true;
 }
