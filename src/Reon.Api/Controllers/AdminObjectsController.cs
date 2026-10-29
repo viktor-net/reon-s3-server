@@ -1,5 +1,14 @@
 namespace Reon.Api.Controllers;
 
+/// <summary>
+/// Объекты внутри бакета: список, загрузка, скачивание, метаданные, версии,
+/// теги и presigned URL.
+/// </summary>
+/// <param name="admin">Сценарии фасада: операции над объектами и версиями.</param>
+/// <param name="tempFiles">Буферизация загружаемых файлов и подсчёт SHA-256.</param>
+/// <param name="fileOptions">Лимиты загрузки и тегов, общие с файловым API.</param>
+/// <param name="auditor">Журнал операций: актор и результат изменений.</param>
+/// <param name="adminOptions">Настройки фасада: актор по умолчанию и границы страниц.</param>
 [Route("api/v1/admin/buckets/{bucket}/objects")]
 [Produces("application/json")]
 public sealed class AdminObjectsController(

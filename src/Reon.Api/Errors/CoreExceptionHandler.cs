@@ -1,5 +1,9 @@
 namespace Reon.Api.Errors;
 
+/// <summary>
+/// Преобразует исключения домена в ProblemDetails с осмысленным HTTP-статусом.
+/// </summary>
+/// <param name="logger">Лог ошибок, которые не удалось классифицировать.</param>
 public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(

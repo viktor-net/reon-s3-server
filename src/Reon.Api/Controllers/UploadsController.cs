@@ -1,5 +1,12 @@
 namespace Reon.Api.Controllers;
 
+/// <summary>
+/// Multipart-сессии: начало, загрузка частей, завершение и отмена.
+/// </summary>
+/// <param name="uploads">Сценарии multipart-загрузки и связь с файловым доменом.</param>
+/// <param name="auditor">Журнал операций: актор и результат шагов загрузки.</param>
+/// <param name="options">Лимиты частей и срок жизни сессии.</param>
+/// <param name="adminOptions">Настройки фасада: актор по умолчанию.</param>
 [ApiController]
 [Route("api/v1/uploads")]
 [Produces("application/json")]

@@ -1,5 +1,9 @@
 namespace Reon.Api.Health;
 
+/// <summary>
+/// Проверка доступности Postgres для health checks.
+/// </summary>
+/// <param name="scopeFactory">Создаёт scope, чтобы получить scoped DbContext вне запроса.</param>
 public sealed class PostgresHealthCheck(IServiceScopeFactory scopeFactory) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(

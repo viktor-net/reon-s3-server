@@ -1,5 +1,11 @@
 namespace Reon.Api.Controllers;
 
+/// <summary>
+/// Файловый API: загрузка, список, скачивание, метаданные, копирование и удаление.
+/// </summary>
+/// <param name="fileStorage">Сценарии файлового домена и жизненный цикл метаданных.</param>
+/// <param name="auditor">Журнал операций: запись актора и результата каждой операции.</param>
+/// <param name="adminOptions">Настройки: актор по умолчанию, если X-Reon-Actor не передан.</param>
 [ApiController]
 [Route("api/v1/files")]
 public sealed class FilesController(

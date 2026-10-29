@@ -1,5 +1,20 @@
 namespace Reon.Api.Controllers;
 
+/// <summary>
+/// Администрирование бакетов: список, создание, настройки, доступ, lifecycle
+/// и использование.
+/// </summary>
+/// <param name="admin">
+/// Сценарии административного фасада: чтение и изменение бакетов, квот,
+/// режима доступа и правил lifecycle.
+/// </param>
+/// <param name="auditor">
+/// Журнал операций: база контроллера записывает в него актора и результат
+/// каждого изменения.
+/// </param>
+/// <param name="adminOptions">
+/// Настройки фасада: актор по умолчанию и верхняя граница размера страницы.
+/// </param>
 [Route("api/v1/admin/buckets")]
 [Produces("application/json")]
 public sealed class AdminBucketsController(

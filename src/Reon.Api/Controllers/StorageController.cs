@@ -1,5 +1,11 @@
 namespace Reon.Api.Controllers;
 
+/// <summary>
+/// Информация о хранилище: статистика по файлам и параметры текущего бакета.
+/// </summary>
+/// <param name="files">Сервис файлового домена: статистика по метаданным.</param>
+/// <param name="objectStorage">Объектное хранилище: имя бакета для ответа.</param>
+/// <param name="options">Лимиты файлового API: префикс ключей и максимальный размер.</param>
 [ApiController]
 [Route("api/v1/storage")]
 [Produces("application/json")]

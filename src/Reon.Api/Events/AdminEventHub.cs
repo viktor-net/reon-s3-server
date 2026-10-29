@@ -7,7 +7,9 @@ namespace Reon.Api.Events;
 /// <summary>
 /// Реестр административных WebSocket-подписчиков и публикатор, которым
 /// пользуются сервисы фасада. События фильтруются для каждого соединения
+/// по бакету и типу.
 /// </summary>
+/// <param name="logger">Лог ошибок отправки: сломанный сокет удаляет подписку.</param>
 public sealed partial class AdminEventHub(ILogger<AdminEventHub> logger) : IStorageEventPublisher
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

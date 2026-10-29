@@ -2,7 +2,12 @@ namespace Reon.Api.Events;
 
 /// <summary>
 /// Поддерживает простаивающие WebSocket-подписки и позволяет клиентам
+/// обнаруживать разрыв соединения.
 /// </summary>
+/// <param name="hub">Хаб подписок: рассылка heartbeat-событий.</param>
+/// <param name="clock">Источник времени для метки occurredAt.</param>
+/// <param name="adminOptions">Настройки фасада: интервал heartbeat в секундах.</param>
+/// <param name="logger">Лог сбоев фонового цикла.</param>
 public sealed partial class AdminEventsHeartbeatService(
     AdminEventHub hub,
     IClock clock,

@@ -1,5 +1,10 @@
 namespace Reon.Api.Health;
 
+/// <summary>
+/// Проверка доступности S3-эндпоинта и учётных данных.
+/// </summary>
+/// <param name="objectStorage">Объектное хранилище: HEAD к заведомо отсутствующему ключу.</param>
+/// <param name="options">Настройки файлового API: префикс ключа для проверки.</param>
 public sealed class S3HealthCheck(
     IObjectStorage objectStorage,
     IOptions<FileStorageOptions> options) : IHealthCheck

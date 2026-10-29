@@ -5,6 +5,8 @@ namespace Reon.Api.Controllers;
 /// Клиентской аутентификации нет, поэтому актор берётся из заголовка
 /// X-Reon-Actor, а при его отсутствии — из Admin:DefaultActor.
 /// </summary>
+/// <param name="auditor">Журнал операций, в который пишут наследники.</param>
+/// <param name="adminOptions">Настройки фасада: актор по умолчанию.</param>
 [ApiController]
 public abstract class ReonApiControllerBase(
     IStorageAuditor auditor,

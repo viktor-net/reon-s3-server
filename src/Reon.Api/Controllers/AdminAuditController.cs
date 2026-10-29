@@ -1,5 +1,11 @@
 namespace Reon.Api.Controllers;
 
+/// <summary>
+/// Журнал операций: постраничное чтение записей административного и файлового API.
+/// </summary>
+/// <param name="admin">Сценарии фасада: выборка записей журнала с фильтрами.</param>
+/// <param name="auditor">Журнал операций: база контроллера пишет в него актора и результат.</param>
+/// <param name="adminOptions">Настройки фасада: актор по умолчанию и граница размера страницы.</param>
 [Route("api/v1/admin/audit")]
 [Produces("application/json")]
 public sealed class AdminAuditController(
