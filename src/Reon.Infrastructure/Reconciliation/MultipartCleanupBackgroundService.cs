@@ -1,9 +1,11 @@
 namespace Reon.Infrastructure.Reconciliation;
 
 /// <summary>
-/// Периодически завершает просроченные multipart-сессии в Postgres и S3.
+/// Периодически завершает просроченные сессии параллельной загрузки файла
+/// по частям (multipart-загрузки) в Postgres и S3.
 /// </summary>
-/// <param name="scopeFactory">Создаёт scope для scoped-сервиса multipart-загрузок.</param>
+/// <param name="scopeFactory">Создаёт scope для scoped-сервиса параллельной
+/// загрузки файла по частям (multipart-загрузки).</param>
 /// <param name="objectStorage">Прерывает незавершённые загрузки на стороне S3.</param>
 /// <param name="options">Срок жизни сессии и интервал очистки.</param>
 /// <param name="logger">Лог сбоев очистки.</param>

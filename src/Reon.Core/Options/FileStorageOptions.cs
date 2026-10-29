@@ -10,22 +10,27 @@ public sealed class FileStorageOptions
     /// <summary>Максимальный размер одного загружаемого файла. По умолчанию: 1 ГиБ.</summary>
     public long MaxFileSizeBytes { get; set; } = 1_073_741_824;
 
-    /// <summary>Файлы больше этого размера загружаются через S3 multipart. По умолчанию: 64 МиБ.</summary>
+    /// <summary>Файлы больше этого размера загружаются через S3 параллельной загрузкой
+    /// файла по частям (multipart-загрузкой). По умолчанию: 64 МиБ.</summary>
     public long MultipartThresholdBytes { get; set; } = 67_108_864;
 
-    /// <summary>Размер части multipart-загрузки. S3 требует не меньше 5 МиБ. По умолчанию: 16 МиБ.</summary>
+    /// <summary>Размер части параллельной загрузки файла по частям
+    /// (multipart-загрузки). S3 требует не меньше 5 МиБ. По умолчанию: 16 МиБ.</summary>
     public int MultipartPartSizeBytes { get; set; } = 16_777_216;
 
     /// <summary>Минимальный размер части, кроме последней. S3 требует 5 МиБ.</summary>
     public int MinMultipartPartSizeBytes { get; set; } = 5_242_880;
 
-    /// <summary>Максимальное число частей в одной multipart-загрузке.</summary>
+    /// <summary>Максимальное число частей в одной параллельной загрузке
+    /// файла по частям (multipart-загрузке).</summary>
     public int MaxMultipartParts { get; set; } = 10_000;
 
-    /// <summary>Сколько хранится незавершённая multipart-загрузка до очистки. По умолчанию: 7 дней.</summary>
+    /// <summary>Сколько хранится незавершённая параллельная загрузка файла
+    /// по частям (multipart-загрузка) до очистки. По умолчанию: 7 дней.</summary>
     public int MultipartUploadLifetimeDays { get; set; } = 7;
 
-    /// <summary>Как часто прерываются просроченные multipart-загрузки.</summary>
+    /// <summary>Как часто прерываются просроченные параллельные загрузки
+    /// файла по частям (multipart-загрузки).</summary>
     public int MultipartCleanupIntervalMinutes { get; set; } = 60;
 
     /// <summary>Каждый сгенерированный ключ объекта начинается с этого префикса.</summary>

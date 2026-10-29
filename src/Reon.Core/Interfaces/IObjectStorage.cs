@@ -94,7 +94,8 @@ public interface IObjectStorage
     IAsyncEnumerable<ObjectInfo> ListAsync(string prefix, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Best-effort очистка multipart-загрузок, которые так и не завершились.
+    /// Best-effort очистка параллельных загрузок файла по частям
+    /// (multipart-загрузок), которые так и не завершились.
     /// Реализации, которые не умеют их перечислять, должны залогировать это и вернуть управление.
     /// </summary>
     Task AbortIncompleteUploadsAsync(TimeSpan olderThan, CancellationToken cancellationToken);

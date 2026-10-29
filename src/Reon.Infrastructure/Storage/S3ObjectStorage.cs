@@ -18,7 +18,8 @@ public sealed partial class S3ObjectStorage : IObjectStorage
     /// </summary>
     /// <param name="s3">Клиент AWS SDK с настроенным эндпоинтом и кредами.</param>
     /// <param name="options">Адрес, бакет и стиль адресации S3.</param>
-    /// <param name="fileStorageOptions">Префикс ключей и лимит multipart.</param>
+    /// <param name="fileStorageOptions">Префикс ключей и лимит параллельной
+    /// загрузки файла по частям (multipart-загрузки).</param>
     /// <param name="logger">Лог операций и деградации возможностей провайдера.</param>
     public S3ObjectStorage(
         IAmazonS3 s3,

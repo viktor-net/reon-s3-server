@@ -4,7 +4,8 @@ using System.Security.Cryptography;
 namespace Reon.Core.Services;
 
 /// <summary>
-/// Явные сессии multipart-загрузки. Идентификатор загрузки S3 и протокол S3
+/// Явные сессии параллельной загрузки файла по частям (multipart-загрузки).
+/// Идентификатор загрузки S3 и протокол S3
 /// остаются внутри инфраструктурного слоя; клиенты видят только наш uploadId.
 /// </summary>
 public sealed partial class MultipartUploadService : IMultipartUploadService
@@ -19,7 +20,8 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
     private readonly ILogger<MultipartUploadService> _logger;
 
     /// <summary>
-    /// Создаёт сервис multipart-сессий.
+    /// Создаёт сервис сессий параллельной загрузки файла по частям
+    /// (multipart-загрузки).
     /// </summary>
     /// <param name="objectStorage">Низкоуровневые операции S3: части, complete, abort.</param>
     /// <param name="uploadRepository">Сессии и части в Postgres.</param>
@@ -28,7 +30,8 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
     /// <param name="clock">Время создания, завершения и истечения сессии.</param>
     /// <param name="options">Размер частей, лимиты и срок жизни сессии.</param>
     /// <param name="quotaGuard">Проверка квоты при завершении загрузки.</param>
-    /// <param name="logger">Лог шагов и ошибок multipart-загрузки.</param>
+    /// <param name="logger">Лог шагов и ошибок параллельной загрузки файла
+    /// по частям (multipart-загрузки).</param>
     public MultipartUploadService(
         IObjectStorage objectStorage,
         IMultipartUploadRepository uploadRepository,

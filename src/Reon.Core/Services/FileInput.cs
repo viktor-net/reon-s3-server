@@ -7,7 +7,8 @@ public sealed record NormalizedFileInput(
     JsonDocument? Tags);
 
 /// <summary>
-/// Общая валидация и генерация ключей для обычной и multipart-загрузки.
+/// Общая валидация и генерация ключей для обычной и параллельной загрузки
+/// файла по частям (multipart-загрузки).
 /// </summary>
 public static class FileInput
 {

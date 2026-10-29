@@ -13,7 +13,8 @@ public sealed class MultipartUpload
 
     public Guid FileId { get; private set; }
 
-    /// <summary>Непрозрачный идентификатор multipart-загрузки S3. Клиентам не показывается.</summary>
+    /// <summary>Непрозрачный идентификатор параллельной загрузки файла по частям
+    /// (multipart-загрузки) в S3. Клиентам не показывается.</summary>
     public string StorageUploadId { get; private set; } = string.Empty;
 
     public string Bucket { get; private set; } = string.Empty;

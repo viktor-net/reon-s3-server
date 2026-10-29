@@ -59,8 +59,9 @@ public sealed partial class FileStorageService
         var fileId = Guid.CreateVersion7();
         var objectKey = $"{_options.KeyPrefix}{fileId:N}{GetSafeExtension(originalName)}";
 
-        // Буферизация даёт поток с произвольным доступом (нужен для повторов S3
-        // и multipart), известный размер и контрольную сумму до появления метаданных.
+        // Буферизация даёт поток с произвольным доступом, известный размер и
+        // контрольную сумму до появления метаданных. Произвольный доступ нужен
+        // для повторов S3 и параллельной загрузки файла по частям (multipart-загрузки).
         await using var tempFile = await _tempFiles.CreateAsync(content, _options.MaxFileSizeBytes, cancellationToken);
 
         // Квота проверяется до появления строки метаданных, поэтому отклонённая

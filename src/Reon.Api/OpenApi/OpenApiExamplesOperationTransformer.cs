@@ -367,7 +367,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
 
     private static void TransformInitiateUpload(OpenApiOperation operation)
     {
-        operation.Summary = "Начать multipart-загрузку";
+        operation.Summary = "Начать параллельную загрузку файла по частям";
         operation.Description =
             "Создаёт сессию загрузки. S3 upload id остаётся внутри сервиса; " +
             "клиент использует uploadId, partSize и expiresAt.";
@@ -386,7 +386,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
 
     private static void TransformUploadList(OpenApiOperation operation)
     {
-        operation.Summary = "Активные multipart-загрузки";
+        operation.Summary = "Активные параллельные загрузки файла по частям";
         operation.Description = "Список незавершённых сессий загрузки.";
         SetJsonExample(
             operation,
@@ -396,7 +396,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
 
     private static void TransformUploadGet(OpenApiOperation operation)
     {
-        operation.Summary = "Статус multipart-загрузки";
+        operation.Summary = "Статус параллельной загрузки файла по частям";
         operation.Description = "Возвращает статус, срок жизни и уже загруженные части.";
         SetParameterExample(operation, "uploadId", FileIdExample);
         SetJsonExample(operation, "200", UploadSessionExampleJson);
@@ -415,7 +415,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
 
     private static void TransformUploadComplete(OpenApiOperation operation)
     {
-        operation.Summary = "Завершить multipart-загрузку";
+        operation.Summary = "Завершить параллельную загрузку файла по частям";
         operation.Description =
             "Собирает объект в S3, считает SHA-256 и создаёт описание файла в PostgreSQL.";
         SetParameterExample(operation, "uploadId", FileIdExample);
@@ -424,7 +424,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
 
     private static void TransformUploadAbort(OpenApiOperation operation)
     {
-        operation.Summary = "Прервать multipart-загрузку";
+        operation.Summary = "Прервать параллельную загрузку файла по частям";
         operation.Description =
             "Вызывает AbortMultipartUpload в S3. Повторный abort идемпотентен.";
         SetParameterExample(operation, "uploadId", FileIdExample);
@@ -450,7 +450,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     private static void TransformStorageInfo(OpenApiOperation operation)
     {
         operation.Summary = "Информация о хранилище";
-        operation.Description = "Бакет, лимиты и настройки multipart.";
+        operation.Description = "Бакет, лимиты и настройки параллельной загрузки файла по частям.";
         SetJsonExample(
             operation,
             "200",
