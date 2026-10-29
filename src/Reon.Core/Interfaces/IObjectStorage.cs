@@ -32,7 +32,8 @@ public sealed record ObjectInfo(
     string? ETag,
     string? VersionId,
     DateTimeOffset? LastModified,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    string? ContentType = null);
 
 /// <summary>
 /// Abstraction over the object store. Implementations must not leak

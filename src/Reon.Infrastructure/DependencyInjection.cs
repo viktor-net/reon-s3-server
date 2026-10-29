@@ -32,12 +32,26 @@ public static class DependencyInjection
                 "FileStorage:MultipartThresholdBytes must be at least 5 MiB.")
             .ValidateOnStart();
 
+        services.AddOptions<AdminOptions>()
+            .Bind(configuration.GetSection(AdminOptions.SectionName))
+            .Validate(options => options.UsageCacheSeconds > 0, "Admin:UsageCacheSeconds must be positive.")
+            .Validate(options => options.MaxPageSize > 0, "Admin:MaxPageSize must be positive.")
+            .Validate(
+                options => options.MaxPresignedUrlLifetimeSeconds is > 0 and <= 604_800,
+                "Admin:MaxPresignedUrlLifetimeSeconds must be between 1 and 604800.")
+            .ValidateOnStart();
+
         services.AddDbContext<ReonDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure(3)));
 
         services.AddScoped<IFileMetadataRepository, FileMetadataRepository>();
         services.AddScoped<IMultipartUploadRepository, MultipartUploadRepository>();
         services.AddScoped<IMultipartUploadService, MultipartUploadService>();
+        services.AddScoped<IBucketSettingsRepository, BucketSettingsRepository>();
+        services.AddScoped<IAuditRepository, AuditRepository>();
+        services.AddScoped<IStorageAuditor, StorageAuditor>();
+        services.AddScoped<IStorageQuotaGuard, StorageQuotaGuard>();
+        services.AddScoped<IStorageAdminService, StorageAdminService>();
 
         services.AddSingleton<IAmazonS3>(serviceProvider =>
         {
@@ -59,6 +73,7 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<IObjectStorage, S3ObjectStorage>();
+        services.AddSingleton<IObjectStorageAdmin, S3ObjectStorageAdmin>();
         services.AddSingleton<ITempFileFactory, TemporaryFileFactory>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<IReconciliationService, ReconciliationService>();

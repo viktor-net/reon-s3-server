@@ -8,6 +8,10 @@ public sealed class ReonDbContext(DbContextOptions<ReonDbContext> options) : DbC
 
     public DbSet<MultipartUploadPart> MultipartUploadParts => Set<MultipartUploadPart>();
 
+    public DbSet<BucketSettings> BucketSettings => Set<BucketSettings>();
+
+    public DbSet<AuditEntry> AuditEvents => Set<AuditEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ReonDbContext).Assembly);

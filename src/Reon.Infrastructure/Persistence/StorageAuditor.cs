@@ -1,0 +1,64 @@
+
+
+namespace Reon.Infrastructure.Persistence;
+
+/// <summary>
+/// Persists audit entries and mirrors them into the administrative event
+/// stream. Failures are logged and swallowed: auditing never masks the result
+/// of the operation being recorded.
+/// </summary>
+public sealed partial class StorageAuditor(
+    IAuditRepository repository,
+    IStorageEventPublisher events,
+    IClock clock,
+    ILogger<StorageAuditor> logger) : IStorageAuditor
+{
+    public async Task RecordAsync(
+        string actor,
+        string action,
+        string resource,
+        AuditResult result,
+        int? statusCode,
+        object? details,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var entry = AuditEntry.Create(
+                Guid.CreateVersion7(),
+                string.IsNullOrWhiteSpace(actor) ? "system" : actor.Trim(),
+                action,
+                resource,
+                result,
+                statusCode,
+                details is null
+                    ? null
+                    : JsonSerializer.SerializeToDocument(details, JsonSerializerOptions.Web),
+                clock.UtcNow);
+
+            await repository.AddAsync(entry, cancellationToken);
+            await repository.SaveChangesAsync(cancellationToken);
+
+            await events.PublishAsync(
+                new StorageEvent(
+                    StorageEvent.AuditAppended,
+                    entry.OccurredAt,
+                    entry,
+                    BucketFromResource(resource)),
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogAuditFailed(logger, exception, action);
+        }
+    }
+
+    private static string? BucketFromResource(string resource)
+    {
+        var separator = resource.IndexOf('/');
+        return separator < 0 ? resource : resource[..separator];
+    }
+
+    [LoggerMessage(EventId = 2301, Level = LogLevel.Warning, Message = "Failed to persist an audit entry for action {Action}.")]
+    private static partial void LogAuditFailed(ILogger logger, Exception exception, string action);
+}
