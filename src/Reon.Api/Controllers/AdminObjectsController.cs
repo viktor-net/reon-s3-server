@@ -9,7 +9,8 @@ public sealed class AdminObjectsController(
     IStorageAuditor auditor,
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
-    /// <summary>Список объектов и «папок» (общих префиксов) внутри префикса. В S3 нет поиска по подстроке: при <c>search</c> сервис просматривает до Admin:MaxSearchObjects объектов и фильтрует их в памяти.</summary>
+    /// <summary>Список объектов</summary>
+    /// <remarks>Объекты и «папки» (общие префиксы) внутри префикса. В S3 нет поиска по подстроке: при search сервис просматривает до Admin:MaxSearchObjects объектов и фильтрует их в памяти.</remarks>
     [HttpGet]
     [ProducesResponseType<ObjectListingResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -33,7 +34,8 @@ public sealed class AdminObjectsController(
             listing.NextContinuationToken));
     }
 
-    /// <summary>Загружает один или несколько файлов в текущий префикс.</summary>
+    /// <summary>Загрузить файлы</summary>
+    /// <remarks>Загружает один или несколько файлов в текущий префикс. Если хотя бы один файл не загрузился, уже записанные файлы этого запроса удаляются.</remarks>
     [HttpPost]
     [Consumes("multipart/form-data")]
     [ProducesResponseType<BatchUploadResponse>(StatusCodes.Status201Created)]
@@ -77,7 +79,8 @@ public sealed class AdminObjectsController(
             new BatchUploadResponse(uploaded.Select(item => item.ToResponse()).ToArray()));
     }
 
-    /// <summary>Загружает один объект телом запроса.</summary>
+    /// <summary>Загрузить объект</summary>
+    /// <remarks>Загружает один объект телом запроса.</remarks>
     [HttpPut("{**key}")]
     [ProducesResponseType<ObjectItemResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -115,7 +118,8 @@ public sealed class AdminObjectsController(
             stored.ToResponse());
     }
 
-    /// <summary>Скачивает объект, при необходимости конкретную версию.</summary>
+    /// <summary>Скачать объект</summary>
+    /// <remarks>Скачивает объект, при необходимости конкретную версию.</remarks>
     [HttpGet("{**key}")]
     [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK, "application/octet-stream")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -142,7 +146,8 @@ public sealed class AdminObjectsController(
         return File(content.Stream, content.ContentType, enableRangeProcessing: false);
     }
 
-    /// <summary>Заголовки объекта без тела.</summary>
+    /// <summary>Заголовки объекта</summary>
+    /// <remarks>Метаданные объекта без тела ответа.</remarks>
     [HttpHead("{**key}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -176,7 +181,8 @@ public sealed class AdminObjectsController(
         return Ok();
     }
 
-    /// <summary>Удаляет объект (или одну версию, если указан versionId).</summary>
+    /// <summary>Удалить объект</summary>
+    /// <remarks>Удаляет объект или одну версию, если указан versionId.</remarks>
     [HttpDelete("{**key}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -191,7 +197,8 @@ public sealed class AdminObjectsController(
         return NoContent();
     }
 
-    /// <summary>Метаданные объекта, пользовательские метаданные, теги и число версий.</summary>
+    /// <summary>Метаданные объекта</summary>
+    /// <remarks>Пользовательские метаданные, теги и число версий.</remarks>
     [HttpGet("{key}/metadata")]
     [ProducesResponseType<ObjectMetadataResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -219,7 +226,8 @@ public sealed class AdminObjectsController(
             versionCount));
     }
 
-    /// <summary>Все версии объекта, включая delete markers.</summary>
+    /// <summary>Версии объекта</summary>
+    /// <remarks>Все версии объекта, включая delete markers.</remarks>
     [HttpGet("{key}/versions")]
     [ProducesResponseType<ObjectVersionsResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -233,7 +241,8 @@ public sealed class AdminObjectsController(
         return Ok(new ObjectVersionsResponse(versions.Select(version => version.ToResponse()).ToArray()));
     }
 
-    /// <summary>Удаляет конкретную версию объекта.</summary>
+    /// <summary>Удалить версию</summary>
+    /// <remarks>Удаляет конкретную версию объекта.</remarks>
     [HttpDelete("{key}/versions/{versionId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -248,7 +257,8 @@ public sealed class AdminObjectsController(
         return NoContent();
     }
 
-    /// <summary>Теги объекта — отдельная сущность, не путать с пользовательскими метаданными.</summary>
+    /// <summary>Теги объекта</summary>
+    /// <remarks>Теги — отдельная сущность, не путать с пользовательскими метаданными.</remarks>
     [HttpGet("{key}/tags")]
     [ProducesResponseType<Dictionary<string, string>>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
@@ -262,7 +272,8 @@ public sealed class AdminObjectsController(
         return Ok(tags);
     }
 
-    /// <summary>Заменяет набор тегов объекта.</summary>
+    /// <summary>Изменить теги</summary>
+    /// <remarks>Заменяет набор тегов объекта.</remarks>
     [HttpPut("{key}/tags")]
     [ProducesResponseType<Dictionary<string, string>>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -285,7 +296,8 @@ public sealed class AdminObjectsController(
         return Ok(request.Tags);
     }
 
-    /// <summary>Создаёт временную подписанную ссылку на прямое скачивание.</summary>
+    /// <summary>Presigned URL</summary>
+    /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание.</remarks>
     [HttpPost("{key}/presigned-urls")]
     [ProducesResponseType<PresignedUrlResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]

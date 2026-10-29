@@ -7,7 +7,8 @@ public sealed class AdminOverviewController(
     IStorageAuditor auditor,
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
-    /// <summary>Сводка по хранилищу: бакеты, объекты, объём, публичные бакеты и использование по каждому бакету. Использование кешируется; <c>refreshUsage=true</c> пересчитывает его по объектному хранилищу.</summary>
+    /// <summary>Обзор хранилища</summary>
+    /// <remarks>Бакеты, объекты, объём, публичные бакеты и использование по каждому бакету. Использование кешируется; refreshUsage=true пересчитывает его по объектному хранилищу.</remarks>
     [HttpGet]
     [ProducesResponseType<AdminOverviewResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<AdminOverviewResponse>> Get(

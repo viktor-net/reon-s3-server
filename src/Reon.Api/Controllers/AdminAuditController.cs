@@ -7,7 +7,8 @@ public sealed class AdminAuditController(
     IStorageAuditor auditor,
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
-    /// <summary>Журнал административных операций: актор, ресурс, результат и необязательные JSON-детали.</summary>
+    /// <summary>Журнал операций</summary>
+    /// <remarks>Административные и файловые операции: актор, ресурс, результат и необязательные JSON-детали.</remarks>
     [HttpGet]
     [ProducesResponseType<AuditListResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
