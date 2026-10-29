@@ -1,3 +1,5 @@
+using Reon.Api.Routing;
+
 namespace Reon.Api.Controllers;
 
 /// <summary>
@@ -306,8 +308,8 @@ public sealed class AdminObjectsController(
     }
 
     /// <summary>Presigned URL</summary>
-    /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание.</remarks>
-    [HttpPost("{key}/presigned-urls")]
+    /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание. Это безопасный запрос: объект не меняется, поэтому используется метод QUERY (RFC 10008), а срок жизни передаётся телом.</remarks>
+    [HttpQuery("{key}/presigned-urls")]
     [ProducesResponseType<PresignedUrlResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]

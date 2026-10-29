@@ -24,6 +24,7 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
     options.AddDocumentTransformer<OpenApiTagDescriptionsTransformer>();
+    options.AddDocumentTransformer<OpenApiQueryOperationTransformer>();
     options.AddOperationTransformer<OpenApiExamplesOperationTransformer>();
 });
 builder.Services.AddInfrastructure(builder.Configuration);
