@@ -16,6 +16,7 @@ builder.Services.AddOpenApi(options =>
         document.Info.Description = "Сервис хранения файлов и учёта их описаний.";
         return Task.CompletedTask;
     });
+    options.AddDocumentTransformer<OpenApiTagDescriptionsTransformer>();
     options.AddOperationTransformer<OpenApiExamplesOperationTransformer>();
 });
 builder.Services.AddInfrastructure(builder.Configuration);
