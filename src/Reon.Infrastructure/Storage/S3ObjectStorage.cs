@@ -13,6 +13,13 @@ public sealed partial class S3ObjectStorage : IObjectStorage
     private readonly FileStorageOptions _fileStorageOptions;
     private readonly ILogger<S3ObjectStorage> _logger;
 
+    /// <summary>
+    /// Создаёт S3-адаптер файлового домена.
+    /// </summary>
+    /// <param name="s3">Клиент AWS SDK с настроенным эндпоинтом и кредами.</param>
+    /// <param name="options">Адрес, бакет и стиль адресации S3.</param>
+    /// <param name="fileStorageOptions">Префикс ключей и лимит multipart.</param>
+    /// <param name="logger">Лог операций и деградации возможностей провайдера.</param>
     public S3ObjectStorage(
         IAmazonS3 s3,
         IOptions<S3Options> options,

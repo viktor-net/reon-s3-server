@@ -1,5 +1,11 @@
 namespace Reon.Infrastructure.Reconciliation;
 
+/// <summary>
+/// Периодически удаляет объекты без строки метаданных в Postgres.
+/// </summary>
+/// <param name="scopeFactory">Создаёт scope для scoped-сервисов сверки.</param>
+/// <param name="options">Включение, интервал и льготный период удаления.</param>
+/// <param name="logger">Лог сбоев прохода.</param>
 public sealed partial class OrphanSweepBackgroundService(
     IServiceScopeFactory scopeFactory,
     IOptions<FileStorageOptions> options,

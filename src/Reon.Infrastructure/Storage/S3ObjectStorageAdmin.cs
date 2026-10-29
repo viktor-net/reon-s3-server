@@ -20,6 +20,13 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
     private readonly ILogger<S3ObjectStorageAdmin> _logger;
     private readonly ConcurrentDictionary<string, UsageCacheEntry> _usageCache = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Создаёт административный S3-адаптер.
+    /// </summary>
+    /// <param name="s3">Клиент AWS SDK с настроенным эндпоинтом и кредами.</param>
+    /// <param name="s3Options">Адрес, регион и стиль адресации S3.</param>
+    /// <param name="adminOptions">Срок presigned URL и лимиты административных ответов.</param>
+    /// <param name="logger">Лог деградации возможностей и ошибок S3.</param>
     public S3ObjectStorageAdmin(
         IAmazonS3 s3,
         IOptions<S3Options> s3Options,

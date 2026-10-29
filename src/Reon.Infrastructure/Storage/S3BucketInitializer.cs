@@ -11,6 +11,12 @@ public sealed partial class S3BucketInitializer : IHostedService
     private readonly S3Options _options;
     private readonly ILogger<S3BucketInitializer> _logger;
 
+    /// <summary>
+    /// Создаёт инициализатор бакета при старте приложения.
+    /// </summary>
+    /// <param name="s3">Клиент S3 для проверки и создания бакета.</param>
+    /// <param name="options">Имя бакета и признак обязательного создания.</param>
+    /// <param name="logger">Лог создания и конфликтов при параллельном старте.</param>
     public S3BucketInitializer(
         IAmazonS3 s3,
         IOptions<S3Options> options,

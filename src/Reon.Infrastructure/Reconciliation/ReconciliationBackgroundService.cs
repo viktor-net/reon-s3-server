@@ -1,5 +1,12 @@
 namespace Reon.Infrastructure.Reconciliation;
 
+/// <summary>
+/// Периодически запускает сверку метаданных и объектного хранилища.
+/// </summary>
+/// <param name="scopeFactory">Создаёт scope для scoped-сервиса сверки.</param>
+/// <param name="objectStorage">Прерывает незавершённые multipart-загрузки.</param>
+/// <param name="options">Интервал сверки и связанные таймауты.</param>
+/// <param name="logger">Лог сбоев прохода.</param>
 public sealed partial class ReconciliationBackgroundService(
     IServiceScopeFactory scopeFactory,
     IObjectStorage objectStorage,

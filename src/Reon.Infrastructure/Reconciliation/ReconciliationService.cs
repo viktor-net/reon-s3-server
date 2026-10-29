@@ -20,6 +20,15 @@ public sealed partial class ReconciliationService : IReconciliationService
     private readonly FileStorageOptions _options;
     private readonly ILogger<ReconciliationService> _logger;
 
+    /// <summary>
+    /// Создаёт сервис сверки.
+    /// </summary>
+    /// <param name="dbContext">Postgres: advisory lock, чтобы проход выполнял один экземпляр.</param>
+    /// <param name="repository">Строки files, которые нужно проверить или очистить.</param>
+    /// <param name="objectStorage">Проверка и удаление объектов в S3.</param>
+    /// <param name="clock">Время для поиска просроченных строк.</param>
+    /// <param name="options">Таймауты, интервалы и срок хранения удалённых строк.</param>
+    /// <param name="logger">Лог расхождений и ошибок восстановления.</param>
     public ReconciliationService(
         ReonDbContext dbContext,
         IFileMetadataRepository repository,

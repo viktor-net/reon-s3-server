@@ -4,6 +4,8 @@ namespace Reon.Infrastructure.Persistence;
 /// Проверка квоты по административным настройкам бакета. Использование берётся
 /// из объектного хранилища через короткий кеш, поэтому проверка приблизительная.
 /// </summary>
+/// <param name="settings">Квота бакета из Postgres; её отсутствие отключает проверку.</param>
+/// <param name="storageAdmin">Использование бакета с учётом кеша.</param>
 public sealed class StorageQuotaGuard(
     IBucketSettingsRepository settings,
     IObjectStorageAdmin storageAdmin) : IStorageQuotaGuard

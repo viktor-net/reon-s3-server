@@ -1,5 +1,9 @@
 namespace Reon.Infrastructure.Persistence;
 
+/// <summary>
+/// Репозиторий поверх Postgres для таблицы bucket_settings.
+/// </summary>
+/// <param name="dbContext">Контекст EF Core с нужным DbSet.</param>
 public sealed class BucketSettingsRepository(ReonDbContext dbContext) : IBucketSettingsRepository
 {
     public Task<BucketSettings?> GetAsync(string bucket, CancellationToken cancellationToken)

@@ -4,6 +4,10 @@ using Reon.Core.Interfaces;
 
 namespace Reon.Infrastructure.Persistence;
 
+/// <summary>
+/// Репозиторий поверх Postgres для таблицы multipart_uploads.
+/// </summary>
+/// <param name="dbContext">Контекст EF Core с нужным DbSet.</param>
 public sealed class MultipartUploadRepository(ReonDbContext dbContext) : IMultipartUploadRepository
 {
     public async Task AddAsync(MultipartUpload upload, CancellationToken cancellationToken)

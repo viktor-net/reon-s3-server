@@ -1,5 +1,3 @@
-
-
 namespace Reon.Infrastructure.Persistence;
 
 /// <summary>
@@ -7,6 +5,10 @@ namespace Reon.Infrastructure.Persistence;
 /// Ошибки логируются и подавляются: аудит никогда не подменяет результат
 /// записываемой операции.
 /// </summary>
+/// <param name="repository">Вставка записей в audit_events.</param>
+/// <param name="events">Публикация события audit.appended.</param>
+/// <param name="clock">Время события для записи и WebSocket-конверта.</param>
+/// <param name="logger">Лог сбоев записи, которые не должны ломать операцию.</param>
 public sealed partial class StorageAuditor(
     IAuditRepository repository,
     IStorageEventPublisher events,

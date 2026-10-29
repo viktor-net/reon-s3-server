@@ -1,5 +1,9 @@
 namespace Reon.Infrastructure.Persistence;
 
+/// <summary>
+/// Репозиторий поверх Postgres для таблицы audit_events.
+/// </summary>
+/// <param name="dbContext">Контекст EF Core с нужным DbSet.</param>
 public sealed class AuditRepository(ReonDbContext dbContext) : IAuditRepository
 {
     public async Task AddAsync(AuditEntry entry, CancellationToken cancellationToken)

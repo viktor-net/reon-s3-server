@@ -1,5 +1,9 @@
 namespace Reon.Infrastructure.Persistence;
 
+/// <summary>
+/// Репозиторий поверх Postgres для таблицы files.
+/// </summary>
+/// <param name="dbContext">Контекст EF Core с нужным DbSet.</param>
 public sealed class FileMetadataRepository(ReonDbContext dbContext) : IFileMetadataRepository
 {
     public async Task AddAsync(FileMetadata file, CancellationToken cancellationToken)
