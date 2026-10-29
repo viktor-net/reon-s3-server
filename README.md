@@ -154,7 +154,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | `DELETE` | `/api/admin/buckets/{bucket}/objects/{key}/versions/{versionId}` | Удалить конкретную версию |
 | `GET` | `/api/admin/buckets/{bucket}/objects/{key}/tags` | Теги объекта |
 | `PUT` | `/api/admin/buckets/{bucket}/objects/{key}/tags` | Заменить теги объекта |
-| `POST` | `/api/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная ссылка на скачивание |
+| `QUERY` | `/api/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная ссылка на скачивание |
 | `GET` | `/api/admin/audit` | Журнал операций с фильтрами и страницами |
 | `WS` | `/api/admin/events` | WebSocket-поток событий |
 
@@ -174,7 +174,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | Обзор | `GET /api/admin/overview` |
 | Бакеты | `GET/POST /api/admin/buckets` |
 | Объекты | `GET /api/admin/buckets/{bucket}/objects`, `POST .../objects`, `PUT .../objects/{**key}` |
-| Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `POST .../objects/{key}/presigned-urls` |
+| Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `QUERY .../objects/{key}/presigned-urls` |
 | Настройки бакета | `PATCH /api/admin/buckets/{bucket}`, `GET/PUT .../lifecycle`, `GET .../usage` |
 | Управление доступом | `GET/PUT /api/admin/buckets/{bucket}/access` |
 | Использование и квоты | `GET /api/admin/overview`, `GET .../usage`, `POST .../usage/refresh` |
