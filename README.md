@@ -271,8 +271,14 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ├── Reon.S3.Server.slnx                    # решение: Api, Core, Infrastructure, тесты
 ├── Directory.Build.props                  # общие настройки сборки
 ├── global.json                            # версия .NET SDK
-├── Dockerfile                             # сборка и запуск API в контейнере
-├── docker-compose.yml                     # PostgreSQL + API, внешняя сеть Swift
+├── Dockerfile                             # образ API для ручной сборки
+├── docker-compose.yml                     # Postgres, Swift, Swagger UI, Filestash
+├── docker/
+│   ├── filestash/config.json              # seed-конфиг Filestash
+│   └── swagger/                           # Swagger UI для S3/Swift API
+│       ├── nginx.conf                     # прокси /api → swift:8080
+│       ├── openapi.yaml                   # контракт S3/Swift (копия из reon-s3-dev)
+│       └── swagger-signer.js              # подпись S3-запросов в браузере
 ├── README.md                              # описание сервиса, API и архитектуры
 ├── CONTRIBUTIONS.md                       # правила коммитов
 ├── .config/
@@ -742,35 +748,38 @@ Dev-значения S3 (`test:tester` / `testing`) лежат в `appsettings.D
 
 ## Запуск
 
-### Вариант 1: Docker Compose
+Compose поднимает инфраструктуру — Postgres, Swift, Swagger UI и Filestash.
+API запускается локально из исходников.
 
-Нужен уже запущенный Swift из `reon-s3-dev`:
+### Инфраструктура
+
+Нужен образ Swift из `reon-s3-dev` — соберите его один раз:
 
 ```bash
 cd ../reon-s3-dev
-docker compose up -d swift
+docker compose build swift
 ```
 
 Затем:
 
 ```bash
 cd ../reon-s3-server
-docker compose up -d --build
+docker compose up -d
 ```
 
-- API: http://localhost:8090
-- Scalar UI: http://localhost:8090/scalar/api
-- OpenAPI: http://localhost:8090/openapi/api.json
+- S3: http://localhost:8080
+- Swagger UI для S3/Swift API: http://localhost:8081
+- Filestash: http://localhost:8082 (админка `/admin`, `admin` / `admin`)
 - Postgres: localhost:5433, БД `reon`, пользователь `reon`
 
-Compose использует внешнюю сеть `openstack-swift-s3api_default` и обращается к
-Swift по имени `swift:8080`. Если имя сети в вашем окружении другое, поправьте
-`networks.swift.name` в `docker-compose.yml`.
+Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь только запуск
+образа `swift-s3api-aio:2.33` (переопределяется через `SWIFT_IMAGE`).
+Внешних сетей нет. Конфиги Swagger UI и Filestash — в `docker/swagger/`
+и `docker/filestash/`.
 
-### Вариант 2: локально
+### API
 
 ```bash
-docker compose up -d postgres
 dotnet run --project src/Reon.Api
 ```
 

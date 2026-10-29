@@ -1,0 +1,25 @@
+{
+    "general": {
+        "name": "Swift S3",
+        "secret_key": "swiftS3devKey123"
+    },
+    "auth": {
+        "admin": "$2a$10$LmBPwb03/Dd7ru.N6LGgKeLkjK00UkXo4Ku6FXIwXE2KoAPCkacY6"
+    },
+    "connections": [
+        {
+            "type": "s3",
+            "label": "Swift S3"
+        }
+    ],
+    "middleware": {
+        "identity_provider": {
+            "type": "passthrough",
+            "params": "{\"strategy\":\"direct\"}"
+        },
+        "attribute_mapping": {
+            "related_backend": "Swift S3",
+            "params": "{\"Swift S3\":{\"type\":\"s3\",\"endpoint\":\"http://swift:8080\",\"region\":\"us-east-1\",\"access_key_id\":\"test:tester\",\"secret_access_key\":\"testing\"}}"
+        }
+    }
+}

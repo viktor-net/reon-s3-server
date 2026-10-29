@@ -1,0 +1,2689 @@
+openapi: 3.0.3
+
+servers:
+  - url: http://localhost:8080
+    description: OpenStack Swift
+
+x-runtime:
+  image: swift-s3api-aio:2.33
+  base_image: ubuntu:24.04
+  swift_version: 2.33.0
+  published_port: 8080
+  internal_ports:
+    proxy: 8080
+    object: 6000
+    container: 6001
+    account: 6002
+    memcached: 11211
+  volume: swift-data:/srv/node
+  healthcheck:
+    method: GET
+    path: /healthcheck
+    expected_status: 200
+    expected_body: OK
+  middleware_pipeline:
+    - catch_errors
+    - gatekeeper
+    - healthcheck
+    - proxy-logging
+    - cache
+    - listing_formats
+    - s3api
+    - tempauth
+    - bulk
+    - slo
+    - dlo
+    - versioned_writes
+    - symlink
+    - proxy-server
+  enabled_features:
+    - S3 API (upstream s3api middleware)
+    - Tempauth v1.0
+    - Native Swift account/container/object API
+    - Bulk delete and archive auto-extract (bulk)
+    - Static Large Objects (slo)
+    - Dynamic Large Objects (dlo)
+    - Symlinks (symlink)
+    - JSON/XML listings (listing_formats)
+  disabled_features:
+    - TempURL (no tempurl middleware in the pipeline)
+    - Native COPY method (no copy middleware; use PUT + X-Copy-From)
+    - Native legacy versioning (versioned_writes is loaded, but container-server has no allow_versions = true)
+    - S3 versioning writes (object_versioning middleware is not in the pipeline)
+    - CORS, form POST, static website, bucket policy, lifecycle, notifications
+
+tags:
+  - name: Служебные
+    description: Проверка состояния и информация о сервере.
+  - name: S3 — авторизация
+    description: |
+      Управление автоматической подписью S3 в контейнере документации.
+      Эти методы не относятся к OpenStack Swift API.
+  - name: S3 — сервис
+    description: Операции уровня сервиса.
+  - name: S3 — бакеты
+    description: Создание, удаление и настройка бакетов.
+  - name: S3 — объекты
+    description: Загрузка, чтение и копирование объектов.
+  - name: S3 — многочастная загрузка
+    description: Загрузка больших объектов частями.
+  - name: S3 — групповое удаление
+    description: Удаление нескольких объектов одним запросом.
+  - name: Swift — авторизация
+    description: Получение токена для Swift API.
+  - name: Swift — аккаунт
+    description: Список контейнеров и метаданные аккаунта.
+  - name: Swift — контейнеры
+    description: Создание контейнеров и список объектов.
+  - name: Swift — объекты
+    description: Загрузка, чтение и удаление объектов.
+  - name: Swift — групповое удаление
+    description: Групповое удаление объектов и контейнеров.
+
+x-tagGroups:
+  - name: Служебные
+    tags:
+      - Служебные
+  - name: Swagger UI (dev)
+    tags:
+      - S3 — авторизация
+  - name: S3
+    tags:
+      - S3 — сервис
+      - S3 — бакеты
+      - S3 — объекты
+      - S3 — многочастная загрузка
+      - S3 — групповое удаление
+  - name: Swift
+    tags:
+      - Swift — авторизация
+      - Swift — аккаунт
+      - Swift — контейнеры
+      - Swift — объекты
+      - Swift — групповое удаление
+
+security: []
+
+paths:
+  /healthcheck:
+    get:
+      tags: [Служебные]
+      operationId: getHealthcheck
+      summary: Проверка состояния
+      description: |
+        Возвращает 200 и тело OK, если прокси работает.
+      security: []
+      responses:
+        '200':
+          description: Прокси работает.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /info:
+    get:
+      tags: [Служебные]
+      operationId: getInfo
+      summary: Информация о сервере
+      description: |
+        Возвращает версию Swift, список хранилищ и лимиты.
+      security: []
+      responses:
+        '200':
+          description: Возможности и лимиты.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwiftInfo'
+
+  /dev/s3-signing/login:
+    post:
+      servers:
+        - url: /
+      tags: [S3 — авторизация]
+      operationId: s3SigningLogin
+      summary: Включить авто-подпись S3
+      description: |
+        Включает автоматическую подпись S3-запросов в Swagger UI и задаёт
+        ключи доступа. По умолчанию используются `test:tester` / `testing`;
+        можно передать свои значения в теле запроса.
+
+        Состояние хранится в `localStorage` браузера. Это **не** S3-логин и не
+        серверная сессия: на curl, AWS CLI или boto3 метод не влияет. После
+        включения Swagger UI снова подписывает каждый запрос к `/api/...`
+        свежей SigV4-подписью.
+
+        Если ключи не совпадают с ключами Swift, S3-запросы получат
+        `403 SignatureDoesNotMatch`.
+      security: []
+      x-dev-only: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessKey:
+                  type: string
+                  description: Access key. Пустое значение — использовать `test:tester`.
+                  default: test:tester
+                secretKey:
+                  type: string
+                  format: password
+                  description: Secret key. Пустое значение — использовать `testing`.
+                  default: testing
+            example:
+              accessKey: test:tester
+              secretKey: testing
+      responses:
+        '200':
+          description: Подпись включена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3SigningStatus'
+              example:
+                signing: enabled
+                message: S3 request signing enabled
+
+  /dev/s3-signing/logout:
+    post:
+      servers:
+        - url: /
+      tags: [S3 — авторизация]
+      operationId: s3SigningLogout
+      summary: Выключить авто-подпись S3
+      description: |
+        Выключает автоматическую подпись S3 в Swagger UI и удаляет сохранённые
+        в браузере ключи. После этого S3-запросы уходят без заголовка
+        `Authorization`, и Swift отвечает `404`/`403`.
+
+        Это не logout из Swift и не отзыв `X-Auth-Token`: native Swift API
+        продолжает работать, если в **Authorize** заполнен `Swift_Token`.
+        Повторно включить подпись можно методом `s3SigningLogin`.
+      security: []
+      x-dev-only: true
+      responses:
+        '200':
+          description: Подпись выключена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/S3SigningStatus'
+              example:
+                signing: disabled
+                message: S3 request signing disabled
+
+  /:
+    get:
+      tags: [S3 — сервис]
+      operationId: listBuckets
+      summary: Список бакетов
+      description: |
+        Возвращает все бакеты аккаунта.
+      security:
+        - S3_Authorization: []
+      responses:
+        '200':
+          description: Список бакетов.
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/S3ListAllMyBucketsResult'
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '500':
+          $ref: '#/components/responses/S3InternalError'
+
+  /{Bucket}:
+    parameters:
+      - $ref: '#/components/parameters/Bucket'
+    get:
+      tags: [S3 — бакеты]
+      operationId: bucketGet
+      summary: Объекты или настройки бакета
+      description: |
+        Без параметров возвращает список объектов. С list-type=2 — вторую версию списка.
+        С uploads — незавершённые многочастные загрузки.
+        С acl, location, versioning, tagging или logging — соответствующую настройку.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3ListType'
+        - $ref: '#/components/parameters/S3Prefix'
+        - $ref: '#/components/parameters/S3Delimiter'
+        - $ref: '#/components/parameters/S3MaxKeys'
+        - $ref: '#/components/parameters/S3Marker'
+        - $ref: '#/components/parameters/S3ContinuationToken'
+        - $ref: '#/components/parameters/S3StartAfter'
+        - $ref: '#/components/parameters/S3EncodingType'
+        - $ref: '#/components/parameters/S3FetchOwner'
+        - $ref: '#/components/parameters/S3Versions'
+        - $ref: '#/components/parameters/S3KeyMarker'
+        - $ref: '#/components/parameters/S3VersionIdMarker'
+        - $ref: '#/components/parameters/S3Uploads'
+        - $ref: '#/components/parameters/S3UploadIdMarker'
+        - $ref: '#/components/parameters/S3MaxUploads'
+        - $ref: '#/components/parameters/S3Acl'
+        - $ref: '#/components/parameters/S3Location'
+        - $ref: '#/components/parameters/S3Versioning'
+        - $ref: '#/components/parameters/S3Tagging'
+        - $ref: '#/components/parameters/S3Logging'
+      responses:
+        '200':
+          description: Результат списка или настройка бакета.
+          content:
+            application/xml:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/S3ListBucketResult'
+                  - $ref: '#/components/schemas/S3ListBucketV2Result'
+                  - $ref: '#/components/schemas/S3ListVersionsResult'
+                  - $ref: '#/components/schemas/S3ListMultipartUploadsResult'
+                  - $ref: '#/components/schemas/S3AccessControlPolicy'
+                  - $ref: '#/components/schemas/S3LocationConstraint'
+                  - $ref: '#/components/schemas/S3VersioningConfiguration'
+                  - $ref: '#/components/schemas/S3Tagging'
+                  - $ref: '#/components/schemas/S3LoggingStatus'
+        '404':
+          $ref: '#/components/responses/S3NoSuchBucket'
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+    put:
+      tags: [S3 — бакеты]
+      operationId: bucketPut
+      summary: Создание бакета или изменение настроек
+      description: |
+        Создаёт бакет. С acl меняет права доступа.
+        В этом стенде versioning, logging и tagging на запись не поддерживаются.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3Acl'
+        - $ref: '#/components/parameters/S3Versioning'
+        - $ref: '#/components/parameters/S3Logging'
+        - $ref: '#/components/parameters/S3Tagging'
+        - $ref: '#/components/parameters/XAmzAcl'
+        - $ref: '#/components/parameters/XAmzGrantRead'
+        - $ref: '#/components/parameters/XAmzGrantWrite'
+        - $ref: '#/components/parameters/XAmzGrantReadAcp'
+        - $ref: '#/components/parameters/XAmzGrantWriteAcp'
+        - $ref: '#/components/parameters/XAmzGrantFullControl'
+      requestBody:
+        required: false
+        content:
+          application/xml:
+            schema:
+              anyOf:
+                - $ref: '#/components/schemas/S3CreateBucketConfiguration'
+                - $ref: '#/components/schemas/S3AccessControlPolicy'
+                - $ref: '#/components/schemas/S3VersioningConfiguration'
+      responses:
+        '200':
+          description: Бакет создан или настройка изменена.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+        '400':
+          $ref: '#/components/responses/S3BadRequest'
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '409':
+          $ref: '#/components/responses/S3Conflict'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+    delete:
+      tags: [S3 — бакеты]
+      operationId: bucketDelete
+      summary: Удаление бакета
+      description: |
+        Удаляет пустой бакет. Если в бакете есть объекты, вернётся 409.
+      security:
+        - S3_Authorization: []
+      responses:
+        '204':
+          description: Бакет удалён.
+        '404':
+          $ref: '#/components/responses/S3NoSuchBucket'
+        '409':
+          $ref: '#/components/responses/S3Conflict'
+    post:
+      tags: [S3 — групповое удаление]
+      operationId: bucketPost
+      summary: Удаление нескольких объектов
+      description: |
+        Удаляет объекты, перечисленные в XML-теле. Это операция S3, а не Swift bulk delete.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3Delete'
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/S3DeleteRequest'
+      responses:
+        '200':
+          description: Результат удаления.
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/S3DeleteResult'
+        '400':
+          $ref: '#/components/responses/S3BadRequest'
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+
+  /{Bucket}/{Key}:
+    parameters:
+      - $ref: '#/components/parameters/Bucket'
+      - $ref: '#/components/parameters/Key'
+    get:
+      tags: [S3 — объекты]
+      operationId: objectGet
+      summary: Получение объекта
+      description: |
+        Возвращает объект. С uploadId — список загруженных частей,
+        с acl — права доступа, с tagging — теги.
+        Поддерживает Range и условные заголовки.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3UploadId'
+        - $ref: '#/components/parameters/S3MaxParts'
+        - $ref: '#/components/parameters/S3PartNumberMarker'
+        - $ref: '#/components/parameters/S3Acl'
+        - $ref: '#/components/parameters/S3Tagging'
+        - $ref: '#/components/parameters/S3VersionId'
+        - $ref: '#/components/parameters/S3ResponseContentType'
+        - $ref: '#/components/parameters/S3ResponseContentLanguage'
+        - $ref: '#/components/parameters/S3ResponseExpires'
+        - $ref: '#/components/parameters/S3ResponseCacheControl'
+        - $ref: '#/components/parameters/S3ResponseContentDisposition'
+        - $ref: '#/components/parameters/S3ResponseContentEncoding'
+        - $ref: '#/components/parameters/Range'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfNoneMatch'
+        - $ref: '#/components/parameters/IfModifiedSince'
+        - $ref: '#/components/parameters/IfUnmodifiedSince'
+      responses:
+        '200':
+          description: Объект или XML-ответ операции.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Last-Modified:
+              $ref: '#/components/headers/LastModified'
+            Content-Length:
+              $ref: '#/components/headers/ContentLength'
+            Accept-Ranges:
+              $ref: '#/components/headers/AcceptRanges'
+            x-amz-version-id:
+              $ref: '#/components/headers/XAmzVersionId'
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/xml:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/S3ListPartsResult'
+                  - $ref: '#/components/schemas/S3AccessControlPolicy'
+                  - $ref: '#/components/schemas/S3Tagging'
+        '206':
+          description: Частичный ответ по Range.
+          headers:
+            Content-Range:
+              $ref: '#/components/headers/ContentRange'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Объект не изменился.
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '404':
+          $ref: '#/components/responses/S3NoSuchKey'
+        '416':
+          $ref: '#/components/responses/S3RangeNotSatisfiable'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+    put:
+      tags: [S3 — объекты]
+      operationId: objectPut
+      summary: Загрузка, копирование или часть
+      description: |
+        Загружает объект. Если передан x-amz-copy-source, копирует объект.
+        Если переданы partNumber и uploadId, загружает часть многочастной загрузки.
+        Для ACL используется параметр acl.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3PartNumber'
+        - $ref: '#/components/parameters/S3UploadId'
+        - $ref: '#/components/parameters/XAmzCopySource'
+        - $ref: '#/components/parameters/XAmzCopySourceRange'
+        - $ref: '#/components/parameters/XAmzMetadataDirective'
+        - $ref: '#/components/parameters/XAmzAcl'
+        - $ref: '#/components/parameters/XAmzGrantRead'
+        - $ref: '#/components/parameters/XAmzGrantWrite'
+        - $ref: '#/components/parameters/XAmzGrantReadAcp'
+        - $ref: '#/components/parameters/XAmzGrantWriteAcp'
+        - $ref: '#/components/parameters/XAmzGrantFullControl'
+        - $ref: '#/components/parameters/ContentType'
+        - $ref: '#/components/parameters/ContentMD5'
+        - $ref: '#/components/parameters/CacheControl'
+        - $ref: '#/components/parameters/ContentDisposition'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentLanguage'
+        - $ref: '#/components/parameters/Expires'
+      requestBody:
+        required: false
+        description: |
+          Тело объекта для загрузки или части. Для копирования не требуется.
+          Для ACL передаётся XML AccessControlPolicy.
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/S3AccessControlPolicy'
+      responses:
+        '200':
+          description: |
+            Объект записан, скопирован, часть загружена или ACL обновлён.
+            Копирование возвращает XML CopyObjectResult.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            x-amz-version-id:
+              $ref: '#/components/headers/XAmzVersionId'
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/S3CopyObjectResult'
+        '400':
+          $ref: '#/components/responses/S3BadRequest'
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '404':
+          $ref: '#/components/responses/S3NoSuchBucket'
+        '416':
+          $ref: '#/components/responses/S3RangeNotSatisfiable'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+    post:
+      tags: [S3 — многочастная загрузка]
+      operationId: objectPost
+      summary: Начало или завершение загрузки
+      description: |
+        С uploads начинает многочастную загрузку.
+        С uploadId завершает её по списку частей.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3Uploads'
+        - $ref: '#/components/parameters/S3UploadId'
+        - $ref: '#/components/parameters/XAmzAcl'
+        - $ref: '#/components/parameters/ContentType'
+        - $ref: '#/components/parameters/CacheControl'
+        - $ref: '#/components/parameters/ContentDisposition'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentLanguage'
+        - $ref: '#/components/parameters/Expires'
+      requestBody:
+        required: false
+        content:
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/S3CompleteMultipartUploadRequest'
+      responses:
+        '200':
+          description: Идентификатор загрузки или результат завершения.
+          content:
+            application/xml:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/S3InitiateMultipartUploadResult'
+                  - $ref: '#/components/schemas/S3CompleteMultipartUploadResult'
+        '400':
+          $ref: '#/components/responses/S3BadRequest'
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '404':
+          $ref: '#/components/responses/S3NoSuchKey'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+    delete:
+      tags: [S3 — объекты]
+      operationId: objectDelete
+      summary: Удаление объекта или отмена загрузки
+      description: |
+        Удаляет объект. С uploadId отменяет многочастную загрузку.
+      security:
+        - S3_Authorization: []
+      parameters:
+        - $ref: '#/components/parameters/S3UploadId'
+        - $ref: '#/components/parameters/S3VersionId'
+        - $ref: '#/components/parameters/S3Tagging'
+      responses:
+        '204':
+          description: Объект удалён или загрузка отменена.
+        '403':
+          $ref: '#/components/responses/S3AccessDenied'
+        '404':
+          $ref: '#/components/responses/S3NoSuchKey'
+        '501':
+          $ref: '#/components/responses/S3NotImplemented'
+
+  /auth/v1.0:
+    get:
+      tags: [Swift — авторизация]
+      operationId: swiftAuthV1
+      summary: Получение токена
+      description: |
+        Этот запрос выдаёт токен для native Swift API. Логин и ключ нужны
+        только здесь; в окно Authorize их вставлять не надо.
+
+        Что отправить:
+
+        | Поле | Значение | Зачем |
+        |---|---|---|
+        | `X-Auth-User` | `test:tester` | логин Swift |
+        | `X-Auth-Key` | `testing` | ключ Swift |
+
+        Что придёт в ответе:
+
+        | Заголовок | Что это | Куда |
+        |---|---|---|
+        | `X-Auth-Token` | токен доступа | в Authorize, поле `Swift_Token` |
+        | `X-Storage-Token` | тот же токен под старым именем | можно игнорировать |
+        | `X-Storage-Url` | адрес аккаунта | в Swagger используйте `/api/v1/AUTH_test` |
+        | `X-Auth-Token-Expires` | сколько секунд живёт токен | около суток |
+
+        Токен Swift не подходит для S3. Для S3 нужна подпись AWS.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XAuthUser'
+        - $ref: '#/components/parameters/XAuthKey'
+      responses:
+        '200':
+          description: Токен получен.
+          headers:
+            X-Auth-Token:
+              $ref: '#/components/headers/XAuthToken'
+            X-Storage-Token:
+              $ref: '#/components/headers/XStorageToken'
+            X-Storage-Url:
+              $ref: '#/components/headers/XStorageUrl'
+            X-Auth-Token-Expires:
+              $ref: '#/components/headers/XAuthTokenExpires'
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+
+  /v1/{account}:
+    parameters:
+      - $ref: '#/components/parameters/SwiftAccount'
+    get:
+      tags: [Swift — аккаунт]
+      operationId: swiftListContainers
+      summary: Список контейнеров
+      description: |
+        Возвращает контейнеры аккаунта. Формат задаётся параметром format.
+        HEAD на этом же пути возвращает только метаданные.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftFormat'
+        - $ref: '#/components/parameters/SwiftPrefix'
+        - $ref: '#/components/parameters/SwiftDelimiter'
+        - $ref: '#/components/parameters/SwiftMarker'
+        - $ref: '#/components/parameters/SwiftEndMarker'
+        - $ref: '#/components/parameters/SwiftLimit'
+        - $ref: '#/components/parameters/SwiftReverse'
+        - $ref: '#/components/parameters/XNewest'
+      responses:
+        '200':
+          description: Список контейнеров.
+          headers:
+            X-Account-Container-Count:
+              $ref: '#/components/headers/XAccountContainerCount'
+            X-Account-Object-Count:
+              $ref: '#/components/headers/XAccountObjectCount'
+            X-Account-Bytes-Used:
+              $ref: '#/components/headers/XAccountBytesUsed'
+            X-Timestamp:
+              $ref: '#/components/headers/XTImestamp'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwiftAccountListing'
+            application/xml:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+        '204':
+          description: Аккаунт пуст.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+    post:
+      tags: [Swift — групповое удаление]
+      operationId: swiftAccountPost
+      summary: Метаданные или групповое удаление
+      description: |
+        Без bulk-delete обновляет метаданные аккаунта.
+        С bulk-delete удаляет объекты и контейнеры, перечисленные в теле.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftBulkDelete'
+        - $ref: '#/components/parameters/XAccountMeta'
+      requestBody:
+        required: false
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Результат группового удаления.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwiftBulkDeleteResult'
+            application/xml:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+        '204':
+          description: Метаданные обновлены.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+    delete:
+      tags: [Swift — групповое удаление]
+      operationId: swiftAccountDelete
+      summary: Групповое удаление или удаление аккаунта
+      description: |
+        С bulk-delete удаляет объекты и контейнеры.
+        Без параметра помечает аккаунт на удаление.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftBulkDelete'
+      requestBody:
+        required: false
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Результат группового удаления.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '204':
+          description: Аккаунт помечен на удаление.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '403':
+          $ref: '#/components/responses/SwiftForbidden'
+
+  /v1/{account}/{container}:
+    parameters:
+      - $ref: '#/components/parameters/SwiftAccount'
+      - $ref: '#/components/parameters/SwiftContainer'
+    get:
+      tags: [Swift — контейнеры]
+      operationId: swiftListObjects
+      summary: Список объектов
+      description: |
+        Возвращает объекты контейнера. Формат задаётся параметром format.
+        HEAD на этом же пути возвращает только метаданные.
+        Версионирование в этом стенде не включено.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftFormat'
+        - $ref: '#/components/parameters/SwiftPrefix'
+        - $ref: '#/components/parameters/SwiftDelimiter'
+        - $ref: '#/components/parameters/SwiftMarker'
+        - $ref: '#/components/parameters/SwiftEndMarker'
+        - $ref: '#/components/parameters/SwiftLimit'
+        - $ref: '#/components/parameters/SwiftReverse'
+        - $ref: '#/components/parameters/XNewest'
+      responses:
+        '200':
+          description: Список объектов.
+          headers:
+            X-Container-Object-Count:
+              $ref: '#/components/headers/XContainerObjectCount'
+            X-Container-Bytes-Used:
+              $ref: '#/components/headers/XContainerBytesUsed'
+            X-Container-Meta:
+              $ref: '#/components/headers/XContainerMeta'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwiftContainerListing'
+            application/xml:
+              schema:
+                type: string
+            text/plain:
+              schema:
+                type: string
+        '204':
+          description: Контейнер пуст.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+    put:
+      tags: [Swift — контейнеры]
+      operationId: swiftCreateOrUpdateContainer
+      summary: Создание контейнера или загрузка архива
+      description: |
+        Создаёт контейнер и задаёт метаданные.
+        С extract-archive распаковывает архив в контейнер.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftExtractArchive'
+        - $ref: '#/components/parameters/XContainerRead'
+        - $ref: '#/components/parameters/XContainerWrite'
+        - $ref: '#/components/parameters/XContainerMeta'
+      requestBody:
+        required: false
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Контейнер создан.
+        '202':
+          description: Метаданные обновлены.
+        '400':
+          $ref: '#/components/responses/SwiftBadRequest'
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '409':
+          $ref: '#/components/responses/SwiftConflict'
+    post:
+      tags: [Swift — контейнеры]
+      operationId: swiftUpdateContainerMetadata
+      summary: Обновление метаданных
+      description: |
+        Обновляет метаданные контейнера. Пустое значение удаляет ключ.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/XContainerRead'
+        - $ref: '#/components/parameters/XContainerWrite'
+        - $ref: '#/components/parameters/XContainerMeta'
+      responses:
+        '204':
+          description: Метаданные обновлены.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+    delete:
+      tags: [Swift — контейнеры]
+      operationId: swiftDeleteContainer
+      summary: Удаление контейнера
+      description: |
+        Удаляет пустой контейнер. Если в нём есть объекты, вернётся 409.
+      security:
+        - Swift_Token: []
+      responses:
+        '204':
+          description: Контейнер удалён.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+        '409':
+          $ref: '#/components/responses/SwiftConflict'
+
+  /v1/{account}/{container}/{object}:
+    parameters:
+      - $ref: '#/components/parameters/SwiftAccount'
+      - $ref: '#/components/parameters/SwiftContainer'
+      - $ref: '#/components/parameters/SwiftObject'
+    x-unsupported-methods:
+      COPY: |
+        В этом стенде метод COPY недоступен. Используйте PUT с X-Copy-From.
+    get:
+      tags: [Swift — объекты]
+      operationId: swiftGetObject
+      summary: Получение объекта
+      description: |
+        Возвращает объект. С multipart-manifest=get — манифест SLO,
+        с symlink=get — сам symlink. Поддерживает Range и условные заголовки.
+        HEAD на этом же пути возвращает только метаданные.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftMultipartManifestGet'
+        - $ref: '#/components/parameters/SwiftManifestFormat'
+        - $ref: '#/components/parameters/SwiftSymlinkGet'
+        - $ref: '#/components/parameters/XNewest'
+        - $ref: '#/components/parameters/Range'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IfNoneMatch'
+        - $ref: '#/components/parameters/IfModifiedSince'
+        - $ref: '#/components/parameters/IfUnmodifiedSince'
+      responses:
+        '200':
+          description: Объект или манифест SLO.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Last-Modified:
+              $ref: '#/components/headers/LastModified'
+            Content-Length:
+              $ref: '#/components/headers/ContentLength'
+            Accept-Ranges:
+              $ref: '#/components/headers/AcceptRanges'
+            X-Object-Meta:
+              $ref: '#/components/headers/XObjectMeta'
+            X-Static-Large-Object:
+              $ref: '#/components/headers/XStaticLargeObject'
+            X-Object-Manifest:
+              $ref: '#/components/headers/XObjectManifest'
+            X-Manifest-Etag:
+              $ref: '#/components/headers/XManifestEtag'
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwiftSloManifest'
+        '206':
+          description: Частичный ответ по Range.
+          headers:
+            Content-Range:
+              $ref: '#/components/headers/ContentRange'
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Объект не изменился.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+        '412':
+          $ref: '#/components/responses/SwiftPreconditionFailed'
+        '416':
+          $ref: '#/components/responses/SwiftRangeNotSatisfiable'
+    put:
+      tags: [Swift — объекты]
+      operationId: swiftPutObject
+      summary: Создание объекта, копирование или манифест
+      description: |
+        Создаёт или перезаписывает объект.
+        С X-Copy-From копирует другой объект.
+        С multipart-manifest=put загружает манифест SLO.
+        С X-Object-Manifest задаёт DLO, с X-Symlink-Target — symlink.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftMultipartManifestPut'
+        - $ref: '#/components/parameters/SwiftCopyFrom'
+        - $ref: '#/components/parameters/XObjectMeta'
+        - $ref: '#/components/parameters/XDeleteAt'
+        - $ref: '#/components/parameters/XDeleteAfter'
+        - $ref: '#/components/parameters/XObjectManifest'
+        - $ref: '#/components/parameters/XSymlinkTarget'
+        - $ref: '#/components/parameters/XSymlinkTargetEtag'
+        - $ref: '#/components/parameters/XSymlinkTargetAccount'
+        - $ref: '#/components/parameters/ContentType'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentDisposition'
+        - $ref: '#/components/parameters/ContentLanguage'
+        - $ref: '#/components/parameters/CacheControl'
+        - $ref: '#/components/parameters/Expires'
+      requestBody:
+        required: false
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwiftSloManifest'
+      responses:
+        '201':
+          description: Объект создан.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '202':
+          description: Объект перезаписан.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '400':
+          $ref: '#/components/responses/SwiftBadRequest'
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+        '409':
+          $ref: '#/components/responses/SwiftConflict'
+        '422':
+          description: Ошибка в манифесте SLO.
+    post:
+      tags: [Swift — объекты]
+      operationId: swiftUpdateObjectMetadata
+      summary: Обновление метаданных объекта
+      description: |
+        Обновляет метаданные объекта. Тело не используется.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/XObjectMeta'
+        - $ref: '#/components/parameters/ContentType'
+        - $ref: '#/components/parameters/ContentEncoding'
+        - $ref: '#/components/parameters/ContentDisposition'
+        - $ref: '#/components/parameters/ContentLanguage'
+        - $ref: '#/components/parameters/CacheControl'
+        - $ref: '#/components/parameters/Expires'
+      responses:
+        '202':
+          description: Метаданные обновлены.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+    delete:
+      tags: [Swift — объекты]
+      operationId: swiftDeleteObject
+      summary: Удаление объекта
+      description: |
+        Удаляет объект. С multipart-manifest=delete удаляет манифест и сегменты SLO.
+      security:
+        - Swift_Token: []
+      parameters:
+        - $ref: '#/components/parameters/SwiftMultipartManifestDelete'
+        - $ref: '#/components/parameters/SwiftSloAsync'
+      responses:
+        '204':
+          description: Объект удалён.
+        '401':
+          $ref: '#/components/responses/SwiftUnauthorized'
+        '404':
+          $ref: '#/components/responses/SwiftNotFound'
+
+components:
+  securitySchemes:
+    S3_Authorization:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        SigV4-подпись запросов к S3 API Swift (заголовок **Authorization**).
+
+        Поле не предназначено для ручного заполнения.
+        Подпись вычисляется в браузере скриптом docs/swagger-signer.js,
+        который отдаёт контейнер документации. Механика включается запросом
+        **POST /dev/s3-signing/login**:
+        ключи доступа ложатся в localStorage, и далее каждый запрос к
+        **/api/..** подписывается свежей SigV4-подписью. На curl, AWS CLI
+        и boto3 это не влияет.
+
+        Ручной ввод бесполезен: SigV4 подписывает финальное состояние
+        запроса — метод, URI, заголовки, хеш тела и время (**X-Amz-Date**), —
+        которое Swagger UI собирает только в момент Execute, поэтому
+        предвычисленная подпись неизбежно даёт **403 SignatureDoesNotMatch**.
+
+        Схема оставлена в спеке, чтобы машиночитаемо объявлять защиту
+        эндпоинтов (замочки, кодгенераторы) и документировать механику
+        аутентификации S3, — а не как поле для ввода.
+    Swift_Token:
+      type: apiKey
+      in: header
+      name: X-Auth-Token
+      description: |
+        Только для Swift. Сначала выполните запрос GET /auth/v1.0 с заголовками
+        X-Auth-User и X-Auth-Key. В ответе будет X-Auth-Token.
+
+        Скопируйте значение X-Auth-Token и вставьте сюда. Логин и ключ
+        (X-Auth-User и X-Auth-Key) в это поле вставлять не нужно.
+
+        Этот токен не подходит для S3. При этом Swift и S3 не конфликтуют:
+        у Swift заголовок X-Auth-Token, у S3 — Authorization. Можно заполнить
+        оба поля и работать с обоими API.
+
+  parameters:
+    Bucket:
+      name: Bucket
+      in: path
+      required: true
+      description: |
+        Имя S3-бакета (Swift-контейнера). В этом стенде
+        `dns_compliant_bucket_names = true`, поэтому имя должно быть
+        DNS-совместимым: 3–63 символа, lowercase, цифры, `.` и `-`.
+      schema:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+        example: demo-bucket
+    Key:
+      name: Key
+      in: path
+      required: true
+      description: |
+        Ключ объекта. Может содержать `/` (псевдо-директории). Клиенты
+        должны передавать `/` как разделитель path, а не как `%2F`.
+      schema:
+        type: string
+        example: dir/hello.txt
+    S3ListType:
+      name: list-type
+      in: query
+      required: false
+      description: "`2` выбирает ListObjectsV2. Без параметра — ListObjects v1."
+      schema:
+        type: integer
+        enum: [2]
+    S3Prefix:
+      name: prefix
+      in: query
+      required: false
+      description: Префикс ключей.
+      schema:
+        type: string
+    S3Delimiter:
+      name: delimiter
+      in: query
+      required: false
+      description: Разделитель для группировки в `CommonPrefixes` (обычно `/`).
+      schema:
+        type: string
+    S3MaxKeys:
+      name: max-keys
+      in: query
+      required: false
+      description: Максимум ключей в ответе (Swift default/max — 10000).
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 10000
+        default: 1000
+    S3Marker:
+      name: marker
+      in: query
+      required: false
+      description: Начало listing для ListObjects v1.
+      schema:
+        type: string
+    S3ContinuationToken:
+      name: continuation-token
+      in: query
+      required: false
+      description: Токен продолжения ListObjectsV2 (base64 от последнего ключа).
+      schema:
+        type: string
+    S3StartAfter:
+      name: start-after
+      in: query
+      required: false
+      description: Начальный ключ для ListObjectsV2.
+      schema:
+        type: string
+    S3EncodingType:
+      name: encoding-type
+      in: query
+      required: false
+      description: Кодировать ключи в ответе. Поддерживается только `url`.
+      schema:
+        type: string
+        enum: [url]
+    S3FetchOwner:
+      name: fetch-owner
+      in: query
+      required: false
+      description: Включать owner в ListObjectsV2.
+      schema:
+        type: boolean
+    S3Versions:
+      name: versions
+      in: query
+      required: false
+      description: |
+        Listing версий объектов (`ListObjectVersions`). В этом стенде
+        версионирование не включено, поэтому реальные версии не создаются;
+        обычно возвращается текущий объект с `VersionId=null`.
+      schema:
+        type: boolean
+    S3KeyMarker:
+      name: key-marker
+      in: query
+      required: false
+      description: Маркер ключа для ListObjectVersions/ListMultipartUploads.
+      schema:
+        type: string
+    S3VersionIdMarker:
+      name: version-id-marker
+      in: query
+      required: false
+      description: Маркер версии для ListObjectVersions.
+      schema:
+        type: string
+    S3Uploads:
+      name: uploads
+      in: query
+      required: false
+      description: Subresource `?uploads` — ListMultipartUploads / CreateMultipartUpload.
+      schema:
+        type: boolean
+    S3UploadId:
+      name: uploadId
+      in: query
+      required: false
+      description: Идентификатор multipart upload.
+      schema:
+        type: string
+    S3UploadIdMarker:
+      name: upload-id-marker
+      in: query
+      required: false
+      description: Маркер upload id для ListMultipartUploads.
+      schema:
+        type: string
+    S3MaxUploads:
+      name: max-uploads
+      in: query
+      required: false
+      description: Максимум multipart upload'ов в ответе.
+      schema:
+        type: integer
+        minimum: 0
+        default: 1000
+    S3PartNumber:
+      name: partNumber
+      in: query
+      required: false
+      description: Номер части multipart upload (1–10000).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
+    S3MaxParts:
+      name: max-parts
+      in: query
+      required: false
+      description: Максимум частей в ListParts.
+      schema:
+        type: integer
+        minimum: 0
+        default: 1000
+    S3PartNumberMarker:
+      name: part-number-marker
+      in: query
+      required: false
+      description: Маркер номера части для ListParts.
+      schema:
+        type: integer
+        minimum: 0
+    S3Acl:
+      name: acl
+      in: query
+      required: false
+      description: Subresource `?acl` — ACL bucket/object.
+      schema:
+        type: boolean
+    S3Location:
+      name: location
+      in: query
+      required: false
+      description: Subresource `?location` — регион бакета.
+      schema:
+        type: boolean
+    S3Versioning:
+      name: versioning
+      in: query
+      required: false
+      description: Subresource `?versioning`.
+      schema:
+        type: boolean
+    S3Tagging:
+      name: tagging
+      in: query
+      required: false
+      description: Subresource `?tagging`.
+      schema:
+        type: boolean
+    S3Logging:
+      name: logging
+      in: query
+      required: false
+      description: Subresource `?logging`.
+      schema:
+        type: boolean
+    S3Delete:
+      name: delete
+      in: query
+      required: true
+      description: Subresource `?delete` для multi-object delete.
+      schema:
+        type: boolean
+        default: true
+    S3VersionId:
+      name: versionId
+      in: query
+      required: false
+      description: |
+        Идентификатор версии объекта (`null` — текущая версия). В этом стенде
+        `object_versioning` не включён: не-`null` версия обычно даёт `501`.
+      schema:
+        type: string
+    S3ResponseContentType:
+      name: response-content-type
+      in: query
+      required: false
+      description: Переопределить `Content-Type` в ответе GetObject.
+      schema:
+        type: string
+    S3ResponseContentLanguage:
+      name: response-content-language
+      in: query
+      required: false
+      description: Переопределить `Content-Language` в ответе GetObject.
+      schema:
+        type: string
+    S3ResponseExpires:
+      name: response-expires
+      in: query
+      required: false
+      description: Переопределить `Expires` в ответе GetObject.
+      schema:
+        type: string
+    S3ResponseCacheControl:
+      name: response-cache-control
+      in: query
+      required: false
+      description: Переопределить `Cache-Control` в ответе GetObject.
+      schema:
+        type: string
+    S3ResponseContentDisposition:
+      name: response-content-disposition
+      in: query
+      required: false
+      description: Переопределить `Content-Disposition` в ответе GetObject.
+      schema:
+        type: string
+    S3ResponseContentEncoding:
+      name: response-content-encoding
+      in: query
+      required: false
+      description: Переопределить `Content-Encoding` в ответе GetObject.
+      schema:
+        type: string
+    XAmzAcl:
+      name: x-amz-acl
+      in: header
+      required: false
+      description: Предустановленный S3 ACL.
+      schema:
+        type: string
+        enum:
+          - private
+          - public-read
+          - public-read-write
+          - authenticated-read
+          - bucket-owner-read
+          - bucket-owner-full-control
+    XAmzGrantRead:
+      name: x-amz-grant-read
+      in: header
+      required: false
+      description: Явный S3 grant (список `id="..."` / `uri="..."`).
+      schema:
+        type: string
+    XAmzGrantWrite:
+      name: x-amz-grant-write
+      in: header
+      required: false
+      description: Явный S3 grant на запись.
+      schema:
+        type: string
+    XAmzGrantReadAcp:
+      name: x-amz-grant-read-acp
+      in: header
+      required: false
+      description: Явный S3 grant на чтение ACL.
+      schema:
+        type: string
+    XAmzGrantWriteAcp:
+      name: x-amz-grant-write-acp
+      in: header
+      required: false
+      description: Явный S3 grant на запись ACL.
+      schema:
+        type: string
+    XAmzGrantFullControl:
+      name: x-amz-grant-full-control
+      in: header
+      required: false
+      description: Явный S3 grant full control.
+      schema:
+        type: string
+    XAmzCopySource:
+      name: x-amz-copy-source
+      in: header
+      required: false
+      description: |
+        Источник для CopyObject/UploadPartCopy:
+        `/{source-bucket}/{source-key}` или
+        `/{source-bucket}/{source-key}?versionId=...`.
+
+        Пример: `/demo-bucket/dir/hello.txt`. Для обычной загрузки объекта
+        оставьте поле пустым, иначе PUT выполнит копирование.
+      schema:
+        type: string
+    XAmzCopySourceRange:
+      name: x-amz-copy-source-range
+      in: header
+      required: false
+      description: Диапазон байт источника для UploadPartCopy (`bytes=0-5242879`).
+      schema:
+        type: string
+    XAmzMetadataDirective:
+      name: x-amz-metadata-directive
+      in: header
+      required: false
+      description: "`COPY` (по умолчанию) или `REPLACE` для CopyObject."
+      schema:
+        type: string
+        enum: [COPY, REPLACE]
+    ContentType:
+      name: Content-Type
+      in: header
+      required: false
+      schema:
+        type: string
+    ContentMD5:
+      name: Content-MD5
+      in: header
+      required: false
+      description: Base64 MD5 тела; Swift проверяет целостность.
+      schema:
+        type: string
+    CacheControl:
+      name: Cache-Control
+      in: header
+      required: false
+      schema:
+        type: string
+    ContentDisposition:
+      name: Content-Disposition
+      in: header
+      required: false
+      schema:
+        type: string
+    ContentEncoding:
+      name: Content-Encoding
+      in: header
+      required: false
+      schema:
+        type: string
+    ContentLanguage:
+      name: Content-Language
+      in: header
+      required: false
+      schema:
+        type: string
+    Expires:
+      name: Expires
+      in: header
+      required: false
+      schema:
+        type: string
+    Range:
+      name: Range
+      in: header
+      required: false
+      description: Байтовый диапазон (`bytes=0-1023`).
+      schema:
+        type: string
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema:
+        type: string
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema:
+        type: string
+    IfModifiedSince:
+      name: If-Modified-Since
+      in: header
+      required: false
+      schema:
+        type: string
+    IfUnmodifiedSince:
+      name: If-Unmodified-Since
+      in: header
+      required: false
+      schema:
+        type: string
+    SwiftAccount:
+      name: account
+      in: path
+      required: true
+      description: Swift account. Для tempauth — `AUTH_test` (из `X-Storage-Url`).
+      schema:
+        type: string
+        example: AUTH_test
+    SwiftContainer:
+      name: container
+      in: path
+      required: true
+      description: Имя Swift-контейнера.
+      schema:
+        type: string
+        example: demo-bucket
+    SwiftObject:
+      name: object
+      in: path
+      required: true
+      description: Имя объекта; может содержать `/`.
+      schema:
+        type: string
+        example: dir/hello.txt
+    SwiftFormat:
+      name: format
+      in: query
+      required: false
+      description: |
+        Формат ответа. Без параметра — `text/plain` (по строке на элемент);
+        `json` и `xml` дают структурированный ответ.
+      schema:
+        type: string
+        enum: [json, xml]
+    SwiftPrefix:
+      name: prefix
+      in: query
+      required: false
+      schema:
+        type: string
+    SwiftDelimiter:
+      name: delimiter
+      in: query
+      required: false
+      schema:
+        type: string
+    SwiftMarker:
+      name: marker
+      in: query
+      required: false
+      schema:
+        type: string
+    SwiftEndMarker:
+      name: end_marker
+      in: query
+      required: false
+      schema:
+        type: string
+    SwiftLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+    SwiftReverse:
+      name: reverse
+      in: query
+      required: false
+      description: Обратный порядок listing.
+      schema:
+        type: string
+        enum: ['on', 'off', 'true', 'false', '1', '0']
+    SwiftMultipartManifestGet:
+      name: multipart-manifest
+      in: query
+      required: false
+      description: "`get` — вернуть JSON-манифест SLO вместо собранного объекта."
+      schema:
+        type: string
+        enum: [get]
+    SwiftMultipartManifestPut:
+      name: multipart-manifest
+      in: query
+      required: false
+      description: "`put` — загрузить JSON-манифест SLO."
+      schema:
+        type: string
+        enum: [put]
+    SwiftMultipartManifestDelete:
+      name: multipart-manifest
+      in: query
+      required: false
+      description: "`delete` — удалить SLO-манифест и его сегменты (поддержка зависит от клиента/версии)."
+      schema:
+        type: string
+        enum: [delete]
+    SwiftSloAsync:
+      name: async
+      in: query
+      required: false
+      description: |
+        "`yes`" вместе с `?multipart-manifest=delete` — удалить сегменты SLO
+        асинхронно. В этом стенде `slo.allow_async_delete = true`.
+      schema:
+        type: string
+        enum: [yes]
+    SwiftBulkDelete:
+      name: bulk-delete
+      in: query
+      required: false
+      description: Включить bulk delete для account POST/DELETE.
+      schema:
+        type: boolean
+    SwiftExtractArchive:
+      name: extract-archive
+      in: query
+      required: false
+      description: |
+        Распаковать архив в контейнер (`tar`, `tar.gz`, `tar.bz2`).
+        Используется middleware `bulk`.
+      schema:
+        type: string
+        enum: [tar, tar.gz, tar.bz2]
+    SwiftSymlinkGet:
+      name: symlink
+      in: query
+      required: false
+      description: |
+        "`get`" — вернуть сам symlink (пустое тело и `X-Symlink-Target`),
+        а не объект, на который он указывает.
+      schema:
+        type: string
+        enum: [get]
+    SwiftManifestFormat:
+      name: format
+      in: query
+      required: false
+      description: |
+        "`raw`" вместе с `?multipart-manifest=get` — вернуть исходный
+        JSON-манифест SLO без преобразования.
+      schema:
+        type: string
+        enum: [raw]
+    SwiftCopyFrom:
+      name: X-Copy-From
+      in: header
+      required: false
+      description: |
+        Native Swift server-side copy: `{container}/{object}`. Native
+        `COPY`-метод в этом стенде недоступен (нет middleware `copy`).
+      schema:
+        type: string
+    XAuthUser:
+      name: X-Auth-User
+      in: header
+      required: true
+      description: |
+        Логин Swift, обычно `test:tester`. Нужен только в запросе
+        `GET /auth/v1.0`. В Authorize его вставлять не надо.
+      schema:
+        type: string
+        example: test:tester
+    XAuthKey:
+      name: X-Auth-Key
+      in: header
+      required: true
+      description: |
+        Ключ Swift, обычно `testing`. Нужен только в запросе
+        `GET /auth/v1.0`. В Authorize его вставлять не надо.
+      schema:
+        type: string
+        example: testing
+    XAccountMeta:
+      name: X-Account-Meta-*
+      in: header
+      required: false
+      description: |
+        Пользовательские метаданные аккаунта. Один или несколько заголовков
+        вида `X-Account-Meta-Name: value`; пустое значение удаляет ключ.
+      schema:
+        type: string
+    XContainerRead:
+      name: X-Container-Read
+      in: header
+      required: false
+      description: ACL на чтение контейнера (например `.r:*` для публичного чтения).
+      schema:
+        type: string
+    XContainerWrite:
+      name: X-Container-Write
+      in: header
+      required: false
+      description: ACL на запись контейнера.
+      schema:
+        type: string
+    XContainerMeta:
+      name: X-Container-Meta-*
+      in: header
+      required: false
+      description: Пользовательские метаданные контейнера (`X-Container-Meta-Name`).
+      schema:
+        type: string
+    XObjectMeta:
+      name: X-Object-Meta-*
+      in: header
+      required: false
+      description: Пользовательские метаданные объекта (`X-Object-Meta-Name`).
+      schema:
+        type: string
+    XDeleteAt:
+      name: X-Delete-At
+      in: header
+      required: false
+      description: Unix timestamp, когда объект должен быть удалён.
+      schema:
+        type: integer
+    XDeleteAfter:
+      name: X-Delete-After
+      in: header
+      required: false
+      description: Через сколько секунд удалить объект.
+      schema:
+        type: integer
+    XObjectManifest:
+      name: X-Object-Manifest
+      in: header
+      required: false
+      description: |
+        DLO-манифест: `{container}/{prefix}`. Объект собирается из всех
+        сегментов с этим префиксом.
+      schema:
+        type: string
+        example: demo-bucket/segments/
+    XSymlinkTarget:
+      name: X-Symlink-Target
+      in: header
+      required: false
+      description: |
+        Symlink-цель в виде `{container}/{object}` (без ведущего `/`).
+        PUT должен быть zero-byte. Middleware `symlink` перенаправляет
+        GET/HEAD на цель.
+      schema:
+        type: string
+        example: demo-bucket/hello.txt
+    XSymlinkTargetEtag:
+      name: X-Symlink-Target-Etag
+      in: header
+      required: false
+      description: |
+        ETag цели для статической symlink-ссылки. Если цель изменится,
+        GET через symlink вернёт ошибку несовпадения ETag.
+      schema:
+        type: string
+    XSymlinkTargetAccount:
+      name: X-Symlink-Target-Account
+      in: header
+      required: false
+      description: |
+        Аккаунт цели для cross-account symlink. Если не указан, используется
+        аккаунт самого symlink.
+      schema:
+        type: string
+    XNewest:
+      name: X-Newest
+      in: header
+      required: false
+      description: |
+        Swift-specific: `true` — читать со всех реплик и вернуть самую свежую.
+        Может быть дороже обычного GET/HEAD.
+      schema:
+        type: boolean
+
+  headers:
+    ETag:
+      description: MD5 ETag или SLO ETag с суффиксом `-N`.
+      schema:
+        type: string
+    LastModified:
+      description: Время последней модификации (HTTP-date).
+      schema:
+        type: string
+    ContentLength:
+      description: Длина тела в байтах.
+      schema:
+        type: integer
+    ContentRange:
+      description: Диапазон в ответе (`bytes 0-1023/4096`).
+      schema:
+        type: string
+    AcceptRanges:
+      description: Поддерживаемые диапазоны (`bytes`).
+      schema:
+        type: string
+    Location:
+      description: Location созданного ресурса.
+      schema:
+        type: string
+    XAmzVersionId:
+      description: Идентификатор версии объекта.
+      schema:
+        type: string
+    XStaticLargeObject:
+      description: "`True`, если объект — SLO."
+      schema:
+        type: string
+    XObjectManifest:
+      description: DLO-манифест (`container/prefix`).
+      schema:
+        type: string
+    XManifestEtag:
+      description: ETag исходного JSON-манифеста SLO.
+      schema:
+        type: string
+    XAuthToken:
+      description: |
+        Токен для дальнейших запросов native Swift API. Вставьте его в
+        Authorize в поле `Swift_Token` или передавайте в заголовке
+        `X-Auth-Token`.
+      schema:
+        type: string
+    XStorageToken:
+      description: |
+        Тот же токен, что `X-Auth-Token`, но под старым именем. Можно
+        игнорировать и использовать `X-Auth-Token`.
+      schema:
+        type: string
+    XStorageUrl:
+      description: |
+        Адрес аккаунта, например `http://localhost:8080/v1/AUTH_test`.
+        В Swagger UI используйте путь `/api/v1/AUTH_test`.
+      schema:
+        type: string
+    XAuthTokenExpires:
+      description: |
+        Сколько секунд осталось до истечения токена. В этом стенде — около
+        суток.
+      schema:
+        type: integer
+    XAccountContainerCount:
+      description: Количество контейнеров в аккаунте.
+      schema:
+        type: integer
+    XAccountObjectCount:
+      description: Количество объектов в аккаунте.
+      schema:
+        type: integer
+    XAccountBytesUsed:
+      description: Занято байт в аккаунте.
+      schema:
+        type: integer
+    XContainerObjectCount:
+      description: Количество объектов в контейнере.
+      schema:
+        type: integer
+    XContainerBytesUsed:
+      description: Занято байт в контейнере.
+      schema:
+        type: integer
+    XContainerMeta:
+      description: Метаданные контейнера (`X-Container-Meta-*`).
+      schema:
+        type: string
+    XObjectMeta:
+      description: Метаданные объекта (`X-Object-Meta-*`).
+      schema:
+        type: string
+    XTImestamp:
+      description: Внутренний timestamp Swift.
+      schema:
+        type: string
+
+  responses:
+    S3AccessDenied:
+      description: Доступ запрещён (`AccessDenied`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+          example: |
+              <?xml version="1.0" encoding="UTF-8"?>
+              <Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>...</RequestId></Error>
+    S3BadRequest:
+      description: Некорректный запрос (`InvalidRequest`/`MalformedXML`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+    S3Conflict:
+      description: Конфликт (`BucketNotEmpty`, `BucketAlreadyExists`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+    S3NoSuchBucket:
+      description: Бакет не найден (`NoSuchBucket`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+          example: |
+              <?xml version="1.0" encoding="UTF-8"?>
+              <Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist</Message></Error>
+    S3NoSuchKey:
+      description: Ключ не найден (`NoSuchKey`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+          example: |
+              <?xml version="1.0" encoding="UTF-8"?>
+              <Error><Code>NoSuchKey</Code><Message>The specified key does not exist.</Message></Error>
+    S3RangeNotSatisfiable:
+      description: Диапазон вне размера объекта (`InvalidRange`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+    S3NotImplemented:
+      description: Операция не поддерживается (`NotImplemented`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+          example: |
+              <?xml version="1.0" encoding="UTF-8"?>
+              <Error><Code>NotImplemented</Code><Message>The requested resource is not implemented</Message></Error>
+    S3InternalError:
+      description: Внутренняя ошибка (`InternalError`).
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/S3Error'
+    SwiftUnauthorized:
+      description: Нет/просрочен токен или неверные Tempauth-креды.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Unauthorized
+    SwiftForbidden:
+      description: Доступ запрещён.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Forbidden
+    SwiftNotFound:
+      description: Контейнер/объект/аккаунт не найден.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Not Found
+    SwiftConflict:
+      description: Конфликт (например, контейнер не пуст).
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Conflict
+    SwiftBadRequest:
+      description: Некорректный запрос.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Bad Request
+    SwiftPreconditionFailed:
+      description: Не выполнено условие `If-Match`/`If-Unmodified-Since`.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Precondition Failed
+    SwiftRangeNotSatisfiable:
+      description: Диапазон вне размера объекта.
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Requested Range Not Satisfiable
+
+  schemas:
+    S3SigningStatus:
+      type: object
+      properties:
+        signing:
+          type: string
+          enum: [enabled, disabled]
+          example: enabled
+        message:
+          type: string
+          example: S3 request signing enabled
+
+    S3Error:
+      type: object
+      xml:
+        name: Error
+      properties:
+        Code:
+          type: string
+          example: NoSuchKey
+        Message:
+          type: string
+        Resource:
+          type: string
+        RequestId:
+          type: string
+        HostId:
+          type: string
+
+    S3Owner:
+      type: object
+      xml:
+        name: Owner
+      properties:
+        ID:
+          type: string
+          example: test:tester
+        DisplayName:
+          type: string
+          example: test:tester
+
+    S3Initiator:
+      type: object
+      xml:
+        name: Initiator
+      properties:
+        ID:
+          type: string
+          example: test:tester
+        DisplayName:
+          type: string
+          example: test:tester
+
+    S3Bucket:
+      type: object
+      xml:
+        name: Bucket
+      properties:
+        Name:
+          type: string
+          example: demo-bucket
+        CreationDate:
+          type: string
+          format: date-time
+
+    S3ListAllMyBucketsResult:
+      type: object
+      xml:
+        name: ListAllMyBucketsResult
+        namespace: http://s3.amazonaws.com/doc/2006-03-01/
+      properties:
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+        Buckets:
+          type: object
+          xml:
+            name: Buckets
+          properties:
+            Bucket:
+              type: array
+              items:
+                $ref: '#/components/schemas/S3Bucket'
+
+    S3Object:
+      type: object
+      xml:
+        name: Contents
+      properties:
+        Key:
+          type: string
+        LastModified:
+          type: string
+          format: date-time
+        ETag:
+          type: string
+        Size:
+          type: integer
+        StorageClass:
+          type: string
+          example: STANDARD
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+
+    S3CommonPrefix:
+      type: object
+      xml:
+        name: CommonPrefixes
+      properties:
+        Prefix:
+          type: string
+
+    S3ListBucketResult:
+      type: object
+      xml:
+        name: ListBucketResult
+        namespace: http://s3.amazonaws.com/doc/2006-03-01/
+      properties:
+        Name:
+          type: string
+        Prefix:
+          type: string
+        Marker:
+          type: string
+        NextMarker:
+          type: string
+        MaxKeys:
+          type: integer
+        Delimiter:
+          type: string
+        EncodingType:
+          type: string
+        IsTruncated:
+          type: boolean
+        Contents:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3Object'
+        CommonPrefixes:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3CommonPrefix'
+
+    S3ListBucketV2Result:
+      type: object
+      xml:
+        name: ListBucketResult
+        namespace: http://s3.amazonaws.com/doc/2006-03-01/
+      properties:
+        Name:
+          type: string
+        Prefix:
+          type: string
+        StartAfter:
+          type: string
+        ContinuationToken:
+          type: string
+        NextContinuationToken:
+          type: string
+        KeyCount:
+          type: integer
+        MaxKeys:
+          type: integer
+        Delimiter:
+          type: string
+        EncodingType:
+          type: string
+        IsTruncated:
+          type: boolean
+        Contents:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3Object'
+        CommonPrefixes:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3CommonPrefix'
+
+    S3ListVersionsResult:
+      type: object
+      xml:
+        name: ListVersionsResult
+      properties:
+        Name:
+          type: string
+        Prefix:
+          type: string
+        KeyMarker:
+          type: string
+        VersionIdMarker:
+          type: string
+        NextKeyMarker:
+          type: string
+        NextVersionIdMarker:
+          type: string
+        MaxKeys:
+          type: integer
+        Delimiter:
+          type: string
+        EncodingType:
+          type: string
+        IsTruncated:
+          type: boolean
+        Version:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3Version'
+        DeleteMarker:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3DeleteMarker'
+        CommonPrefixes:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3CommonPrefix'
+
+    S3Version:
+      type: object
+      xml:
+        name: Version
+      properties:
+        Key:
+          type: string
+        VersionId:
+          type: string
+        IsLatest:
+          type: boolean
+        LastModified:
+          type: string
+          format: date-time
+        ETag:
+          type: string
+        Size:
+          type: integer
+        StorageClass:
+          type: string
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+
+    S3DeleteMarker:
+      type: object
+      xml:
+        name: DeleteMarker
+      properties:
+        Key:
+          type: string
+        VersionId:
+          type: string
+        IsLatest:
+          type: boolean
+        LastModified:
+          type: string
+          format: date-time
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+
+    S3CreateBucketConfiguration:
+      type: object
+      xml:
+        name: CreateBucketConfiguration
+      properties:
+        LocationConstraint:
+          type: string
+          example: us-east-1
+
+    S3DeleteRequest:
+      type: object
+      xml:
+        name: Delete
+      required: [Object]
+      properties:
+        Object:
+          type: array
+          items:
+            type: object
+            properties:
+              Key:
+                type: string
+              VersionId:
+                type: string
+        Quiet:
+          type: boolean
+          default: false
+
+    S3DeleteResult:
+      type: object
+      xml:
+        name: DeleteResult
+      properties:
+        Deleted:
+          type: array
+          items:
+            type: object
+            properties:
+              Key:
+                type: string
+              VersionId:
+                type: string
+        Error:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3DeleteError'
+
+    S3DeleteError:
+      type: object
+      xml:
+        name: Error
+      properties:
+        Key:
+          type: string
+        VersionId:
+          type: string
+        Code:
+          type: string
+        Message:
+          type: string
+
+    S3CopyObjectResult:
+      type: object
+      xml:
+        name: CopyObjectResult
+      properties:
+        LastModified:
+          type: string
+          format: date-time
+        ETag:
+          type: string
+
+    S3InitiateMultipartUploadResult:
+      type: object
+      xml:
+        name: InitiateMultipartUploadResult
+      properties:
+        Bucket:
+          type: string
+        Key:
+          type: string
+        UploadId:
+          type: string
+
+    S3CompleteMultipartUploadRequest:
+      type: object
+      xml:
+        name: CompleteMultipartUpload
+      required: [Part]
+      properties:
+        Part:
+          type: array
+          items:
+            type: object
+            xml:
+              name: Part
+            properties:
+              PartNumber:
+                type: integer
+              ETag:
+                type: string
+
+    S3CompleteMultipartUploadResult:
+      type: object
+      xml:
+        name: CompleteMultipartUploadResult
+      properties:
+        Location:
+          type: string
+        Bucket:
+          type: string
+        Key:
+          type: string
+        ETag:
+          type: string
+
+    S3Part:
+      type: object
+      xml:
+        name: Part
+      properties:
+        PartNumber:
+          type: integer
+        LastModified:
+          type: string
+          format: date-time
+        ETag:
+          type: string
+        Size:
+          type: integer
+
+    S3ListPartsResult:
+      type: object
+      xml:
+        name: ListPartsResult
+      properties:
+        Bucket:
+          type: string
+        Key:
+          type: string
+        UploadId:
+          type: string
+        Initiator:
+          $ref: '#/components/schemas/S3Initiator'
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+        StorageClass:
+          type: string
+        PartNumberMarker:
+          type: integer
+        NextPartNumberMarker:
+          type: integer
+        MaxParts:
+          type: integer
+        IsTruncated:
+          type: boolean
+        Part:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3Part'
+
+    S3Upload:
+      type: object
+      xml:
+        name: Upload
+      properties:
+        Key:
+          type: string
+        UploadId:
+          type: string
+        Initiator:
+          $ref: '#/components/schemas/S3Initiator'
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+        StorageClass:
+          type: string
+        Initiated:
+          type: string
+          format: date-time
+
+    S3ListMultipartUploadsResult:
+      type: object
+      xml:
+        name: ListMultipartUploadsResult
+      properties:
+        Bucket:
+          type: string
+        KeyMarker:
+          type: string
+        UploadIdMarker:
+          type: string
+        NextKeyMarker:
+          type: string
+        NextUploadIdMarker:
+          type: string
+        MaxUploads:
+          type: integer
+        IsTruncated:
+          type: boolean
+        Upload:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3Upload'
+        CommonPrefixes:
+          type: array
+          items:
+            $ref: '#/components/schemas/S3CommonPrefix'
+
+    S3Grantee:
+      type: object
+      xml:
+        name: Grantee
+      properties:
+        Type:
+          type: string
+          enum: [CanonicalUser, Group, AmazonCustomerByEmail]
+        ID:
+          type: string
+        DisplayName:
+          type: string
+        URI:
+          type: string
+        EmailAddress:
+          type: string
+
+    S3Grant:
+      type: object
+      xml:
+        name: Grant
+      properties:
+        Grantee:
+          $ref: '#/components/schemas/S3Grantee'
+        Permission:
+          type: string
+          enum: [FULL_CONTROL, READ, WRITE, READ_ACP, WRITE_ACP]
+
+    S3AccessControlPolicy:
+      type: object
+      xml:
+        name: AccessControlPolicy
+      properties:
+        Owner:
+          $ref: '#/components/schemas/S3Owner'
+        AccessControlList:
+          type: object
+          xml:
+            name: AccessControlList
+          properties:
+            Grant:
+              type: array
+              items:
+                $ref: '#/components/schemas/S3Grant'
+
+    S3LocationConstraint:
+      type: string
+      description: |
+        Регион бакета. В этом стенде `location = us-east-1`, поэтому s3api
+        возвращает пустой `<LocationConstraint/>`; boto3 видит `None`.
+      xml:
+        name: LocationConstraint
+      example: ""
+
+    S3VersioningConfiguration:
+      type: object
+      xml:
+        name: VersioningConfiguration
+      properties:
+        Status:
+          type: string
+          enum: [Enabled, Suspended]
+        MfaDelete:
+          type: string
+          enum: [Enabled, Disabled]
+
+    S3Tag:
+      type: object
+      xml:
+        name: Tag
+      properties:
+        Key:
+          type: string
+        Value:
+          type: string
+
+    S3Tagging:
+      type: object
+      xml:
+        name: Tagging
+      properties:
+        TagSet:
+          type: object
+          xml:
+            name: TagSet
+          properties:
+            Tag:
+              type: array
+              items:
+                $ref: '#/components/schemas/S3Tag'
+
+    S3LoggingStatus:
+      type: object
+      xml:
+        name: BucketLoggingStatus
+      properties:
+        LoggingEnabled:
+          type: object
+          properties:
+            TargetBucket:
+              type: string
+            TargetPrefix:
+              type: string
+          nullable: true
+
+    SwiftAccountListing:
+      type: array
+      items:
+        $ref: '#/components/schemas/SwiftContainerEntry'
+
+    SwiftContainerEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+        bytes:
+          type: integer
+        last_modified:
+          type: string
+          format: date-time
+
+    SwiftContainerListing:
+      type: array
+      items:
+        anyOf:
+          - $ref: '#/components/schemas/SwiftObjectEntry'
+          - $ref: '#/components/schemas/SwiftSubdirEntry'
+
+    SwiftObjectEntry:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        hash:
+          type: string
+        bytes:
+          type: integer
+        content_type:
+          type: string
+        last_modified:
+          type: string
+          format: date-time
+
+    SwiftSubdirEntry:
+      type: object
+      required: [subdir]
+      properties:
+        subdir:
+          type: string
+          example: dir/
+
+    SwiftSloManifest:
+      type: array
+      description: |
+        JSON-манифест Static Large Object. Каждый элемент — сегмент.
+        `path` — `container/object`, `etag` — MD5 сегмента,
+        `size_bytes` — размер сегмента.
+      items:
+        type: object
+        required: [path, etag, size_bytes]
+        properties:
+          path:
+            type: string
+            example: demo-bucket/segments/0001
+          etag:
+            type: string
+          size_bytes:
+            type: integer
+            format: int64
+
+    SwiftBulkDeleteResult:
+      type: object
+      properties:
+        'Response Status':
+          type: string
+          example: 200 OK
+        'Number Deleted':
+          type: integer
+        'Number Not Found':
+          type: integer
+        Errors:
+          type: array
+          items:
+            type: string
+        'Response Body':
+          type: string
+
+    SwiftInfo:
+      type: object
+      description: |
+        Ответ `GET /info` (discoverability). Набор ключей зависит от
+        middleware, загруженных в контейнер; незнакомые ключи нужно игнорировать.
+      additionalProperties: true
+      properties:
+        swift:
+          type: object
+          additionalProperties: true
+          properties:
+            version:
+              type: string
+              example: 2.33.0
+            policies:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            allow_account_management:
+              type: boolean
+            account_autocreate:
+              type: boolean
+            max_file_size:
+              type: integer
+              format: int64
+            max_object_name_length:
+              type: integer
+            container_listing_limit:
+              type: integer
+        symlink:
+          type: object
+          additionalProperties: true
+        slo:
+          type: object
+          additionalProperties: true
+        bulk_upload:
+          type: object
+          additionalProperties: true
+        bulk_delete:
+          type: object
+          additionalProperties: true
+        tempauth:
+          type: object
+          additionalProperties: true
+        s3api:
+          type: object
+          additionalProperties: true
+
+

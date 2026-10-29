@@ -17,45 +17,91 @@ services:
       timeout: 5s
       retries: 20
 
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: reon-s3-server:dev
-    container_name: reon-s3-api
+  # S3-совместимое хранилище. Образ собирается в reon-s3-dev:
+  #   cd ../reon-s3-dev && docker compose build swift
+  # Здесь только запуск: Dockerfile, конфиги и smoke-тесты Swift остаются там.
+  # Наружу опубликован порт 8080, локальный API ходит на localhost:8080.
+  swift:
+    image: ${SWIFT_IMAGE:-swift-s3api-aio:2.33}
+    container_name: reon-s3-swift
+    hostname: swift
+    init: true
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=reon;Username=reon;Password=reon_dev_password
-      Database__AutoMigrate: "true"
-      # The Swift container is started by the reon-s3-dev compose project.
-      S3__ServiceUrl: http://swift:8080
-      S3__AccessKey: "test:tester"
-      S3__SecretKey: "testing"
-      S3__Region: us-east-1
-      S3__BucketName: reon-files
-      S3__ForcePathStyle: "true"
-      S3__EnsureBucket: "true"
     ports:
-      - "8090:8080"
-    networks:
-      - default
-      - swift
+      - "8080:8080"
+    volumes:
+      - swift-data:/srv/node
+    stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 20s
+      start_period: 30s
 
-networks:
-  swift:
-    external: true
-    name: openstack-swift-s3api_default
+  # Swagger UI для S3/Swift API: http://localhost:8081.
+  # Nginx, подпись запросов и openapi.yaml лежат в docker/swagger/.
+  docs:
+    image: swaggerapi/swagger-ui:v5.17.14
+    container_name: reon-s3-docs
+    restart: unless-stopped
+    depends_on:
+      swift:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      SWAGGER_JSON: /spec/openapi.yaml
+      DOC_EXPANSION: list
+      DEEP_LINKING: "true"
+      PERSIST_AUTHORIZATION: "true"
+      TRY_IT_OUT_ENABLED: "true"
+      VALIDATOR_URL: ""
+    volumes:
+      - ./docker/swagger/openapi.yaml:/spec/openapi.yaml:ro
+      - ./docker/swagger/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./docker/swagger/swagger-signer.js:/spec/swagger-signer.js:ro
+
+  # Веб-менеджер файлов поверх S3: http://localhost:8082 (admin / admin).
+  # Seed-конфиг копируется в volume filestash-state при первом старте,
+  # дальше изменения из /admin живут в этом volume.
+  filestash-init:
+    image: busybox:1.37.0
+    container_name: reon-s3-filestash-init
+    restart: "no"
+    volumes:
+      - filestash-state:/state
+      - ./docker/filestash/config.json:/seed/config.json:ro
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /state/config
+        if [ ! -f /state/config/config.json ]; then
+          cp /seed/config.json /state/config/config.json
+        fi
+        chmod 600 /state/config/config.json
+        chown -R 1000:1000 /state
+
+  filestash:
+    image: machines/filestash:latest
+    container_name: reon-s3-filestash
+    restart: unless-stopped
+    user: "1000:1000"
+    depends_on:
+      filestash-init:
+        condition: service_completed_successfully
+      swift:
+        condition: service_healthy
+    ports:
+      - "8082:8334"
+    environment:
+      # В dev middleware-параметры (включая ключи S3) хранятся открыто.
+      CONFIG_ENCRYPT: "false"
+    volumes:
+      - filestash-state:/app/data/state
 
 volumes:
   reon-postgres-data:
+  swift-data:
+  filestash-state:
