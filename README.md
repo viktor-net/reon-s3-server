@@ -759,8 +759,8 @@ docker compose up -d --build
 ```
 
 - API: http://localhost:8090
-- Scalar UI: http://localhost:8090/scalar/v1
-- OpenAPI: http://localhost:8090/openapi/v1.json
+- Scalar UI: http://localhost:8090/scalar/api
+- OpenAPI: http://localhost:8090/openapi/api.json
 - Postgres: localhost:5433, БД `reon`, пользователь `reon`
 
 Compose использует внешнюю сеть `openstack-swift-s3api_default` и обращается к
@@ -958,7 +958,7 @@ S3-слой дополнительно проверен вручную прот�
 |---|---|
 | `Could not ensure S3 bucket` | Запущен ли `swift-s3api`, верны ли `S3:ServiceUrl` и креды |
 | `502` | Доступность S3, path-style, регион |
-| Scalar UI пустой | Открывайте `http://localhost:8090/scalar/v1`; OpenAPI — `/openapi/v1.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
+| Scalar UI пустой | Открывайте `http://localhost:8090/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
 | Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |
 | Миграции не применились | `Database:AutoMigrate` или `dotnet ef database update` |

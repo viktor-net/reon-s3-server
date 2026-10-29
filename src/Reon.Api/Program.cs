@@ -8,7 +8,7 @@ builder.Services.AddProblemDetails(options =>
         context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
     };
 });
-builder.Services.AddOpenApi(options =>
+builder.Services.AddOpenApi("api", options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
     {
@@ -124,7 +124,7 @@ app.MapGet("/scalar/admin-config.js", () =>
     .ExcludeFromDescription();
 
 // Scalar ищет OpenAPI относительно URL интерфейса. Оставляем псевдонимы
-// для /scalar/v1 и /scalar/v1/, чтобы UI мог загрузить /openapi/v1.json.
+// для /scalar/api и /scalar/api/, чтобы UI мог загрузить /openapi/api.json.
 app.MapGet("/scalar/openapi/{documentName}.json", (string documentName) =>
         Results.Redirect($"/openapi/{documentName}.json", permanent: false))
     .ExcludeFromDescription();
@@ -132,7 +132,7 @@ app.MapGet("/scalar/{documentName}/openapi/{openApiDocument}.json", (string docu
         Results.Redirect($"/openapi/{openApiDocument}.json", permanent: false))
     .ExcludeFromDescription();
 
-app.MapGet("/", () => Results.Redirect("/scalar/v1"))
+app.MapGet("/", () => Results.Redirect("/scalar/api"))
     .ExcludeFromDescription();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
