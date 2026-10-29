@@ -15,6 +15,16 @@ public sealed partial class FileStorageService
     private readonly IStorageQuotaGuard _quotaGuard;
     private readonly ILogger<FileStorageService> _logger;
 
+    /// <summary>
+    /// Создаёт сервис файлового домена.
+    /// </summary>
+    /// <param name="objectStorage">Операции с объектами в S3.</param>
+    /// <param name="repository">Строки метаданных файлов в Postgres.</param>
+    /// <param name="tempFiles">Буферизация потока, проверка размера и SHA-256.</param>
+    /// <param name="clock">Единый источник времени для статусов и меток.</param>
+    /// <param name="options">Лимиты загрузки, ключей и фоновой очистки.</param>
+    /// <param name="quotaGuard">Проверка квоты бакета перед записью.</param>
+    /// <param name="logger">Лог операций и ошибок загрузки.</param>
     public FileStorageService(
         IObjectStorage objectStorage,
         IFileMetadataRepository repository,

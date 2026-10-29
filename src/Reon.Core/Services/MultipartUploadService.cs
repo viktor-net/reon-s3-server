@@ -18,6 +18,17 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
     private readonly IStorageQuotaGuard _quotaGuard;
     private readonly ILogger<MultipartUploadService> _logger;
 
+    /// <summary>
+    /// Создаёт сервис multipart-сессий.
+    /// </summary>
+    /// <param name="objectStorage">Низкоуровневые операции S3: части, complete, abort.</param>
+    /// <param name="uploadRepository">Сессии и части в Postgres.</param>
+    /// <param name="fileRepository">Итоговая строка files после завершения.</param>
+    /// <param name="tempFiles">Буферизация частей и подсчёт SHA-256.</param>
+    /// <param name="clock">Время создания, завершения и истечения сессии.</param>
+    /// <param name="options">Размер частей, лимиты и срок жизни сессии.</param>
+    /// <param name="quotaGuard">Проверка квоты при завершении загрузки.</param>
+    /// <param name="logger">Лог шагов и ошибок multipart-загрузки.</param>
     public MultipartUploadService(
         IObjectStorage objectStorage,
         IMultipartUploadRepository uploadRepository,

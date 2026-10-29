@@ -32,6 +32,19 @@ public sealed partial class StorageAdminService : IStorageAdminService
     private readonly AdminOptions _adminOptions;
     private readonly ILogger<StorageAdminService> _logger;
 
+    /// <summary>
+    /// Создаёт сервис административных сценариев.
+    /// </summary>
+    /// <param name="storage">Административные операции S3 по всем бакетам.</param>
+    /// <param name="settings">Квоты и режим доступа бакетов в Postgres.</param>
+    /// <param name="audit">Чтение журнала операций.</param>
+    /// <param name="auditor">Запись операций в журнал.</param>
+    /// <param name="quotaGuard">Проверка квоты перед загрузкой объекта.</param>
+    /// <param name="events">Публикация событий WebSocket-подписчикам.</param>
+    /// <param name="clock">Время для аудита, usage и presigned URL.</param>
+    /// <param name="fileOptions">Лимиты тегов и метаданных, общие с файловым API.</param>
+    /// <param name="adminOptions">Кеш usage, лимиты страниц и срок presigned URL.</param>
+    /// <param name="logger">Лог откатов и ошибок фоновых операций.</param>
     public StorageAdminService(
         IObjectStorageAdmin storage,
         IBucketSettingsRepository settings,
