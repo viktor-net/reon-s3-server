@@ -5,6 +5,181 @@
 лежит в S3. Остальные модули работают через JSON и бинарный поток и не знают
 деталей S3: ни XML, ни подписи запросов, ни параллельной загрузки файла по частям.
 
+## Запуск
+
+Стенд — это контейнеры Postgres, Swift (S3), Swagger UI для Swift, Filestash и
+OpenTelemetry Collector. API запускается двумя способами: отлаживается на
+хосте из исходников или собирается в контейнер.
+
+Один раз нужен образ Swift из `reon-s3-dev`:
+
+```bash
+cd ../reon-s3-dev
+docker compose build swift
+```
+
+### Вариант 1. Для отладки: стенд без API
+
+```bash
+cd ../reon-s3-server
+docker compose up -d --build
+```
+
+Поднимаются Postgres, Swift, Swagger UI, Filestash и OpenTelemetry Collector.
+Сам API запускается на хосте из исходников — см. раздел
+[API локально](#api-локально).
+
+### Вариант 2. Вместе с API: стенд и API в контейнере
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d --build
+```
+
+Прод-подобный режим: API собирается из `Dockerfile` и работает в одной
+compose-сети с Postgres и Swift. Внутри контейнера используются имена
+сервисов (`postgres:5432`, `swift:8080`), наружу API опубликован на
+`http://localhost:8090`.
+
+Оба `-f` обязательны: `docker-compose.api.yml` — надстройка с одним сервисом
+`api`, а `swift` и `postgres` объявлены в базовом `docker-compose.yml`. Без
+базового файла compose падает с `service "api" depends on undefined service
+"swift"`.
+
+`--profile api` тоже обязателен: сервис `api` включён в профиль, поэтому без
+профиля `docker compose ps` его не покажет и `up` его не поднимет.
+
+Секреты берутся из `.env` (шаблон — `.env.example`):
+
+```bash
+cp .env.example .env
+```
+
+### Адреса стенда
+
+- API: http://localhost:8090, Scalar UI — http://localhost:8090/scalar/api
+- S3: http://localhost:8080
+- Swagger UI для S3/Swift API: http://localhost:8081
+- Filestash: http://localhost:8082 (админка `/admin`, `admin` / `admin`)
+- Postgres: localhost:5433, БД `reon`, пользователь `reon`
+- OpenTelemetry Collector: OTLP gRPC `localhost:4317`, OTLP HTTP
+  `localhost:4318`, health `http://localhost:13133`
+
+Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь только запуск
+образа `swift-s3api-aio:2.33` (переопределяется через `SWIFT_IMAGE`).
+Внешних сетей нет. Конфиги Swagger UI и Filestash — в `docker/swagger/`
+и `docker/filestash/`.
+
+### Повторный запуск и остановка API в контейнере
+
+Запуск уже собранного образа — без сборки .NET:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d --no-build
+```
+
+Образ должен быть собран заранее: командой `build` или предыдущим запуском
+с `--build`. Поднять только остановленный API, не трогая инфраструктуру:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d api
+```
+
+Остановить контейнер API, не трогая инфраструктуру:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api stop api
+```
+
+Профиль публикации задаётся переменной `API_PUBLISH_PROFILE` — это имя
+файла из `src/Reon.Api/Properties/PublishProfiles` без `.pubxml`:
+
+```bash
+API_PUBLISH_PROFILE=Prod docker compose \
+  -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d --build
+```
+
+Пустое значение — обычная Release-публикация. Для ручной сборки профиль
+передаётся в `docker build`:
+
+```bash
+docker build --build-arg PUBLISH_PROFILE=Prod -t reon-s3-api:local .
+```
+
+### API локально
+
+```bash
+dotnet run --project src/Reon.Api
+```
+
+API слушает `http://localhost:8090`, S3 — `http://localhost:8080`.
+Порты Postgres и Swift опубликованы наружу, поэтому контейнеры
+инфраструктуры доступны с хоста. Это основной режим для отладки:
+точки останова, перезапуск и Scalar работают как обычно.
+
+Порт `8090` один на всё: если API уже работает в контейнере, остановите его
+или задайте другой адрес, иначе Kestrel упадёт с
+`Failed to bind to address http://[::1]:8090: address already in use`:
+
+```bash
+ASPNETCORE_URLS=http://localhost:8099 dotnet run --project src/Reon.Api \
+  --no-launch-profile
+```
+
+### OpenTelemetry Collector
+
+`docker compose up -d` поднимает `otel-collector` вместе с остальной
+инфраструктурой. Он принимает телеметрию по OTLP:
+
+- gRPC: `localhost:4317`, из контейнеров — `http://otel-collector:4317`;
+- HTTP: `localhost:4318`;
+- health: `http://localhost:13133`.
+
+Конфигурация — `docker/otel-collector/config.yaml`. Сейчас включён экспортёр
+`debug`: принятые данные печатаются в лог коллектора, поэтому его удобно
+использовать для проверки интеграции. Для реального backend добавьте
+экспортёр (`otlp`, `loki`, `prometheusremotewrite` и т. п.) и подключите его
+в нужном pipeline.
+
+Проверка приёма по OTLP HTTP:
+
+```bash
+curl -X POST http://localhost:4318/v1/logs \
+  -H "Content-Type: application/json" \
+  -d '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"ping"}}]}]}]}'
+docker logs reon-s3-otel-collector --tail 5
+```
+
+### Миграции
+
+```bash
+dotnet tool restore
+dotnet ef database update \
+  --project src/Reon.Infrastructure \
+  --startup-project src/Reon.Api
+```
+
+В Development `Database:AutoMigrate=true`, поэтому при обычном запуске миграции
+применяются автоматически. В production лучше выполнять их отдельным шагом.
+
+### Демо-данные
+
+Заполнить локальный стенд демо-данными ИС РЕОН (реестровые дела, выписки,
+техпланы, фотофиксация, выгрузки для смежных систем):
+
+```bash
+bash scripts/seed/seed.sh          # Windows: pwsh -File scripts/seed/seed.ps1
+bash scripts/seed/clean.sh         # удалить только демо-данные
+```
+
+Скрипт повторяет порядок записи сервиса (`Pending` → объект в S3 → `Ready`)
+и не ломает сверку. Подробности и источники по предметке — в
+`scripts/seed/README.md`.
+
 ## Место сервиса в архитектуре
 
 Это **один сервис**, а не набор микросервисов. Он отвечает за домен файлов
@@ -796,156 +971,6 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 Dev-значения S3 (`test:tester` / `testing`) лежат в `appsettings.Development.json`
 и предназначены только для локального стенда. В production задавайте их через
 секреты/переменные окружения.
-
-## Запуск
-
-Compose поднимает инфраструктуру — Postgres, Swift, Swagger UI и Filestash.
-API можно запустить двумя способами:
-
-- локально из исходников — режим по умолчанию, удобен для отладки;
-- в контейнере из `Dockerfile` — прод-подобная проверка, профиль `api`.
-
-### Инфраструктура
-
-Нужен образ Swift из `reon-s3-dev` — соберите его один раз:
-
-```bash
-cd ../reon-s3-dev
-docker compose build swift
-```
-
-Затем:
-
-```bash
-cd ../reon-s3-server
-docker compose up -d
-```
-
-- S3: http://localhost:8080
-- Swagger UI для S3/Swift API: http://localhost:8081
-- Filestash: http://localhost:8082 (админка `/admin`, `admin` / `admin`)
-- Postgres: localhost:5433, БД `reon`, пользователь `reon`
-- OpenTelemetry Collector: OTLP gRPC `localhost:4317`, OTLP HTTP
-  `localhost:4318`, health `http://localhost:13133`
-
-Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь только запуск
-образа `swift-s3api-aio:2.33` (переопределяется через `SWIFT_IMAGE`).
-Внешних сетей нет. Конфиги Swagger UI и Filestash — в `docker/swagger/`
-и `docker/filestash/`.
-
-### API локально
-
-```bash
-dotnet run --project src/Reon.Api
-```
-
-API слушает `http://localhost:8090`, S3 — `http://localhost:8080`.
-Порты Postgres и Swift опубликованы наружу, поэтому контейнеры
-инфраструктуры доступны с хоста. Это основной режим для отладки:
-точки останова, перезапуск и Scalar работают как обычно.
-
-### API в контейнере (профиль `api`)
-
-Прод-подобный режим: API собирается из `Dockerfile` и работает в одной
-compose-сети с Postgres и Swift. Внутри контейнера используются имена
-сервисов (`postgres:5432`, `swift:8080`), а наружу API опубликован на
-`http://localhost:8090`.
-
-Секреты берутся из `.env` (шаблон — `.env.example`):
-
-```bash
-cp .env.example .env
-```
-
-Сборка образа и запуск:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d --build
-```
-
-Запуск уже собранного образа — без сборки .NET:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d --no-build
-```
-
-Образ должен быть собран заранее: командой `build` или предыдущим запуском
-с `--build`.
-
-Профиль публикации задаётся переменной `API_PUBLISH_PROFILE` — это имя
-файла из `src/Reon.Api/Properties/PublishProfiles` без `.pubxml`:
-
-```bash
-API_PUBLISH_PROFILE=Prod docker compose \
-  -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d --build
-```
-
-Пустое значение — обычная Release-публикация. Для ручной сборки профиль
-передаётся в `docker build`:
-
-```bash
-docker build --build-arg PUBLISH_PROFILE=Prod -t reon-s3-api:local .
-```
-
-Остановить контейнер API, не трогая инфраструктуру:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api stop api
-```
-
-### OpenTelemetry Collector
-
-`docker compose up -d` поднимает `otel-collector` вместе с остальной
-инфраструктурой. Он принимает телеметрию по OTLP:
-
-- gRPC: `localhost:4317`, из контейнеров — `http://otel-collector:4317`;
-- HTTP: `localhost:4318`;
-- health: `http://localhost:13133`.
-
-Конфигурация — `docker/otel-collector/config.yaml`. Сейчас включён экспортёр
-`debug`: принятые данные печатаются в лог коллектора, поэтому его удобно
-использовать для проверки интеграции. Для реального backend добавьте
-экспортёр (`otlp`, `loki`, `prometheusremotewrite` и т. п.) и подключите его
-в нужном pipeline.
-
-Проверка приёма по OTLP HTTP:
-
-```bash
-curl -X POST http://localhost:4318/v1/logs \
-  -H "Content-Type: application/json" \
-  -d '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"ping"}}]}]}]}'
-docker logs reon-s3-otel-collector --tail 5
-```
-
-### Миграции
-
-```bash
-dotnet tool restore
-dotnet ef database update \
-  --project src/Reon.Infrastructure \
-  --startup-project src/Reon.Api
-```
-
-В Development `Database:AutoMigrate=true`, поэтому при обычном запуске миграции
-применяются автоматически. В production лучше выполнять их отдельным шагом.
-
-### Демо-данные
-
-Заполнить локальный стенд демо-данными ИС РЕОН (реестровые дела, выписки,
-техпланы, фотофиксация, выгрузки для смежных систем):
-
-```bash
-bash scripts/seed/seed.sh          # Windows: pwsh -File scripts/seed/seed.ps1
-bash scripts/seed/clean.sh         # удалить только демо-данные
-```
-
-Скрипт повторяет порядок записи сервиса (`Pending` → объект в S3 → `Ready`)
-и не ломает сверку. Подробности и источники по предметке — в
-`scripts/seed/README.md`.
 
 ## База данных
 
