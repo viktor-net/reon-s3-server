@@ -15,8 +15,8 @@ public static class DependencyInjection
         services.AddOptions<S3Options>()
             .Bind(configuration.GetSection(S3Options.SectionName))
             .Validate(options => !string.IsNullOrWhiteSpace(options.ServiceUrl), "S3:ServiceUrl is required.")
-            .Validate(options => !string.IsNullOrWhiteSpace(options.AccessKey), "S3:AccessKey is required.")
-            .Validate(options => !string.IsNullOrWhiteSpace(options.SecretKey), "S3:SecretKey is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.AccessKey),  "S3:AccessKey is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.SecretKey),  "S3:SecretKey is required.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.BucketName), "S3:BucketName is required.")
             .ValidateOnStart();
 
