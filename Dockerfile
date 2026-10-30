@@ -2,6 +2,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY global.json Directory.Build.props Reon.S3.Server.slnx ./
+# .editorconfig нужен анализаторам: в нём отключены правила для миграций,
+# и без него TreatWarningsAsErrors превращает предупреждения в ошибки.
+COPY .editorconfig ./
 COPY src/ src/
 
 RUN dotnet restore src/Reon.Api/Reon.Api.csproj
