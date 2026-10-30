@@ -219,6 +219,35 @@ public sealed partial class FileStorageService
         return file;
     }
 
+    /// <summary>
+    /// Меняет срок хранения или запрет на удаление. Продление разрешено и для
+    /// уже просроченного файла, если объект ещё не удалён: это возвращает его
+    /// в Ready. Удалённый файл изменить нельзя.
+    /// </summary>
+    public async Task<FileMetadata> UpdateRetentionAsync(
+        Guid fileId,
+        int? retentionSeconds,
+        bool? retentionHold,
+        CancellationToken cancellationToken)
+    {
+        var file = await GetExistingFileAsync(fileId, cancellationToken);
+        var now = _clock.UtcNow;
+
+        if (retentionHold is { } hold)
+        {
+            file.SetRetentionHold(hold, now);
+        }
+
+        if (retentionSeconds is { } requested)
+        {
+            var lifetime = _options.ResolveRetention(requested);
+            file.ExtendRetention(now + lifetime!.Value, now);
+        }
+
+        await _repository.SaveChangesAsync(cancellationToken);
+        return file;
+    }
+
     public async Task<FileMetadata> CopyAsync(
         Guid sourceFileId,
         CopyFileCommand command,

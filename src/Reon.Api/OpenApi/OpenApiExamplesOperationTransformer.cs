@@ -107,6 +107,11 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         {
             TransformUpdateMetadata(operation);
         }
+        else if (method.Equals("PATCH", StringComparison.OrdinalIgnoreCase) &&
+                 path.Equals("api/files/{fileId}/retention", StringComparison.OrdinalIgnoreCase))
+        {
+            TransformUpdateRetention(operation);
+        }
         else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
                  path.Equals("api/files/{fileId}/copy", StringComparison.OrdinalIgnoreCase))
         {
@@ -324,6 +329,25 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
               "originalName": "renamed.txt",
               "description": "новое описание",
               "tags": { "kind": "demo" }
+            }
+            """);
+        SetJsonExample(operation, "200", FileExampleJson);
+    }
+
+    private static void TransformUpdateRetention(OpenApiOperation operation)
+    {
+        operation.Summary = "Изменить срок хранения";
+        operation.Description =
+            "retentionSeconds задаёт новый срок от текущего момента; " +
+            "retentionHold запрещает или разрешает удаление по сроку. Продление " +
+            "просроченного файла возвращает его в Ready, если объект ещё не удалён.";
+        SetParameterExample(operation, "fileId", FileIdExample);
+        SetJsonRequestBodyExample(
+            operation,
+            """
+            {
+              "retentionSeconds": 2592000,
+              "retentionHold": false
             }
             """);
         SetJsonExample(operation, "200", FileExampleJson);

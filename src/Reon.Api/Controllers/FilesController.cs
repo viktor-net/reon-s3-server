@@ -185,6 +185,50 @@ public sealed class FilesController(
         return Ok(FileMetadataResponse.FromEntity(file));
     }
 
+    /// <summary>Меняет срок хранения или запрет на удаление.</summary>
+    /// <remarks>
+    /// retentionSeconds задаёт новый срок от текущего момента и может вернуть
+    /// просроченный файл в Ready, если объект ещё не удалён. retentionHold
+    /// запрещает или разрешает удаление по сроку. Оба поля необязательны;
+    /// переданные значения применяются вместе.
+    /// </remarks>
+    [HttpPatch("{fileId:guid}/retention")]
+    [Produces("application/json")]
+    [ProducesResponseType<FileMetadataResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<ActionResult<FileMetadataResponse>> UpdateRetention(
+        Guid fileId,
+        [FromBody] UpdateRetentionRequest request,
+        CancellationToken cancellationToken)
+    {
+        FileMetadata file;
+        try
+        {
+            file = await fileStorage.UpdateRetentionAsync(
+                fileId,
+                request.RetentionSeconds,
+                request.RetentionHold,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await AuditFailureAsync("file.retention.update", $"file/{fileId}", exception, cancellationToken);
+            throw;
+        }
+
+        await AuditAsync(
+            "file.retention.update",
+            $"file/{fileId}",
+            AuditResult.Success,
+            StatusCodes.Status200OK,
+            new { request.RetentionSeconds, request.RetentionHold },
+            cancellationToken);
+
+        return Ok(FileMetadataResponse.FromEntity(file));
+    }
+
     /// <summary>Создаёт копию файла.</summary>
     /// <remarks>
     /// Копия получает собственный fileId и собственный срок хранения.

@@ -236,6 +236,50 @@ public sealed class FileStorageServiceTests
         Assert.Equal(Now.AddMinutes(1), source.ExpiresAt);
     }
 
+    [Fact]
+    public async Task UpdateRetentionAsync_ExtendsExpiredFileAndReturnsToReady()
+    {
+        var file = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 60),
+            CancellationToken.None);
+
+        _clock.UtcNow = Now.AddMinutes(2);
+
+        var updated = await _service.UpdateRetentionAsync(
+            file.Id,
+            retentionSeconds: 3600,
+            retentionHold: null,
+            CancellationToken.None);
+
+        Assert.Equal(FileStatus.Ready, updated.Status);
+        Assert.Equal(Now.AddMinutes(2).AddHours(1), updated.ExpiresAt);
+        Assert.Null(updated.ExpiredAt);
+    }
+
+    [Fact]
+    public async Task UpdateRetentionAsync_SetsHoldAndKeepsFileAvailable()
+    {
+        var file = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 60),
+            CancellationToken.None);
+
+        await _service.UpdateRetentionAsync(
+            file.Id,
+            retentionSeconds: null,
+            retentionHold: true,
+            CancellationToken.None);
+
+        _clock.UtcNow = Now.AddMinutes(2);
+
+        var content = await _service.OpenContentAsync(file.Id, CancellationToken.None);
+
+        Assert.True(file.RetentionHold);
+        Assert.NotNull(content.Stream);
+        await content.Stream.DisposeAsync();
+    }
+
     private Task<Reon.Core.Entities.FileMetadata> UploadAsync()
     {
         return _service.UploadAsync(

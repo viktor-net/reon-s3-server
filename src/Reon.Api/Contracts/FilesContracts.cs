@@ -17,6 +17,14 @@ public sealed record CopyFileRequest(
     Dictionary<string, string>? Tags,
     int? RetentionSeconds = null);
 
+/// <summary>
+/// Изменение срока хранения. retentionSeconds продлевает срок от текущего
+/// момента; retentionHold запрещает или разрешает удаление по сроку.
+/// </summary>
+public sealed record UpdateRetentionRequest(
+    int? RetentionSeconds = null,
+    bool? RetentionHold = null);
+
 public sealed record BulkDeleteRequest(
     IReadOnlyList<Guid> FileIds,
     bool ContinueOnError = true);
