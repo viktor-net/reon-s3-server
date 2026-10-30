@@ -7,6 +7,7 @@ builder
     .AddReonApiUploadLimits();
 
 builder.Services.AddReonApi(builder.Configuration, builder.Environment);
+builder.Services.AddReonTelemetry(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 

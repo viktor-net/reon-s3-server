@@ -45,6 +45,7 @@
   квоты, lifecycle, анонимный доступ и журнал операций.
 - WebSocket-поток административных событий.
 - OpenAPI + Scalar UI с примерами.
+- OTLP-телеметрия: сквозные спаны S3/Postgres и логи контейнеров в OpenTelemetry Collector.
 - Фоновая сверка Postgres и S3, очистка orphan-объектов и зависших сессий параллельной загрузки файла по частям.
 - Health checks `/health/live` и `/health/ready`.
 
@@ -306,6 +307,8 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   │   ├── AdminEventHub.cs           # подписки и публикация событий
 │   │   │   ├── AdminEventsEndpoint.cs     # WebSocket /api/admin/events
 │   │   │   └── AdminEventsHeartbeatService.cs
+│   │   ├── Telemetry/
+│   │   │   └── S3SpanProcessor.cs         # s3.bucket без ключа объекта
 │   │   ├── Health/
 │   │   │   ├── PostgresHealthCheck.cs
 │   │   │   └── S3HealthCheck.cs
@@ -1143,34 +1146,58 @@ S3-слой дополнительно проверен вручную прот�
 Поля событий Serilog: `@t` — время, `@mt` — шаблон сообщения, `@l` — уровень,
 `@x` — исключение, `@tr`/`@sp` — trace/span, остальные свойства события
 (`RequestMethod`, `RequestPath`, `StatusCode`, `Elapsed` и т. п.) лежат
-в корне объекта. OpenTelemetry Collector из `docker-compose.yml` принимает
-OTLP; чтобы дополнительно собирать stdout-логи Docker-контейнеров, добавьте
-в его конфиг `filelog` receiver и смонтируйте каталог логов демона — пример:
+в корне объекта.
 
-```yaml
-receivers:
-  filelog:
-    include: [/var/lib/docker/containers/*/*-json.log]
-    start_at: end
-    operators:
-      - type: json_parser        # обёртка docker json-file: {"log": "...", "stream": "stdout"}
-        parse_from: body
-        parse_to: body
-      - type: move
-        from: body.log
-        to: body
-      - type: json_parser        # событие Serilog
-        parse_from: body
-        parse_to: attributes
-      - type: timestamp
-        parse_from: attributes["@t"]
-        layout_type: gotime
-        layout: 2006-01-02T15:04:05.0000000Z07:00
-```
+OpenTelemetry Collector из `docker-compose.yml` собирает stdout контейнеров
+через `filelog` (json-file демона Docker) и раскладывает записи по
+`service.name`:
+
+| Источник | `service.name` | Признак строки |
+|---|---|---|
+| API, Serilog JSON | `reon-s3-api` | начинается с `{` |
+| Swift S3 | `swift-s3` | ISO-8601 + `swift ...-server:` |
+| PostgreSQL | `postgres` | `YYYY-MM-DD ... [pid] LOG:` |
+
+`@tr`/`@sp` переносятся в `trace_id`/`span_id` записи, поэтому логи API
+связаны со спанами. Коллектор работает от root и монтирует
+`/var/lib/docker/containers`: на Linux это каталог демона, на Docker Desktop —
+каталог внутри его VM. Свои логи коллектор исключает по короткому id
+контейнера. Остальные контейнеры стенда (`docs`, `filestash`) тоже попадают
+в поток, но без `service.name`. Конфигурация —
+`docker/otel-collector/config.yaml`.
 
 В журнал попадают HTTP-запросы с методом, путём, статусом и временем,
 обработанные доменные ошибки со стеком исключения, ошибки S3 и фоновых
 сервисов.
+
+## Трассировки
+
+API отправляет спаны напрямую в коллектор по OTLP/gRPC на порт `4317`.
+Адрес задаётся переменной `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose —
+`http://otel-collector:4317`), локально по умолчанию —
+`http://localhost:4317`.
+
+Что попадает в спаны:
+
+- входящие HTTP-запросы ASP.NET Core — `GET /api/files`, `GET /health/ready`;
+- исходящие HTTP-запросы;
+- вызовы S3 через AWS SDK: `rpc.system=aws-api`, `rpc.service=S3`,
+  `rpc.method=PutObject|GetObject|...`, `s3.bucket`; ключ объекта в спаны
+  не попадает;
+- запросы к Postgres через Npgsql: имя спана `postgresql`,
+  `db.system.name=postgresql`, `server.address`.
+
+Ресурс спанов: `service.name=reon-s3-api`, `service.namespace=reon`,
+`service.version`, `service.instance.id` (генерируется при старте и не
+меняется до перезапуска), `deployment.environment.name` из
+`ASPNETCORE_ENVIRONMENT` и `reon.observability.profile=REON-OBS-1.0`.
+Настройка — `src/Reon.Api/Extensions/TelemetryExtensions.cs`, профиль спанов
+S3 — `src/Reon.Api/Telemetry/S3SpanProcessor.cs`.
+
+Локально спаны видны в логе коллектора (`debug/traces`,
+`verbosity: detailed`). Для постоянного хранения добавьте в
+`docker/otel-collector/config.yaml` экспортёр Tempo/Jaeger или внешний
+OTLP-endpoint.
 
 ## Troubleshooting
 
@@ -1182,6 +1209,8 @@ receivers:
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
 | API в контейнере не видит Postgres/Swift | Внутри compose используйте `postgres:5432` и `swift:8080`, а не `localhost`; проверьте `.env` и `docker compose ps` |
 | `Задайте POSTGRES_PASSWORD в .env` | Скопируйте `.env.example` в `.env` и заполните секреты |
+| `filelog: permission denied` | Коллектор должен работать с `user: "0:0"` и монтировать `/var/lib/docker/containers` |
+| Спаны не приходят в коллектор | Проверьте `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose — `http://otel-collector:4317`), health коллектора `http://localhost:13133` и `docker logs reon-s3-otel-collector` |
 | Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |
 | Миграции не применились | `Database:AutoMigrate` или `dotnet ef database update` |
 | Файл `Missing` | Объект удалён из S3; проверьте бэкап/versioning |

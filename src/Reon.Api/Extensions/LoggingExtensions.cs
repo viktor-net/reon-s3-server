@@ -44,7 +44,12 @@ public static class LoggingExtensions
             configuration
                 .ReadFrom.Configuration(context.Configuration)
                 .ReadFrom.Services(services)
-                .Enrich.FromLogContext();
+                .Enrich.FromLogContext()
+                // Окружение нужно коллектору, чтобы проставить
+                // deployment.environment.name в логи из stdout.
+                .Enrich.WithProperty(
+                    "deployment.environment.name",
+                    builder.Environment.EnvironmentName.ToLowerInvariant());
 
             if (useJsonConsole)
             {

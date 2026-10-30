@@ -41,6 +41,8 @@ services:
       S3__BucketName: ${S3_BUCKET_NAME:-reon-files}
       S3__ForcePathStyle: "true"
       Database__AutoMigrate: ${DATABASE_AUTO_MIGRATE:-true}
+      # Спаны и метрики уходят в коллектор по OTLP/gRPC.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       # Контейнерные логи читает stdout/коллектор, поэтому всегда JSON.
       Serilog__Console__Json: "true"
     depends_on:
