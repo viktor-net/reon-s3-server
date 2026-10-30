@@ -1,0 +1,49 @@
+# OpenTelemetry Collector для локального стенда.
+#
+# Принимает OTLP по gRPC (4317) и HTTP (4318) от API и других сервисов,
+# обрабатывает батчами и печатает в свой лог (экспортёр debug).
+# Для реального backend добавьте экспортёр (otlp, loki, prometheusremotewrite
+# и т. п.) и подключите его в нужном pipeline ниже.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Ограничивает память, чтобы коллектор не уронил стенд при всплеске.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    timeout: 5s
+    send_batch_size: 8192
+
+exporters:
+  debug:
+    # normal показывает содержимое записей; detailed — ещё и все атрибуты.
+    verbosity: normal
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]

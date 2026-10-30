@@ -26,18 +26,8 @@
   внутреннего устройства сервиса.
 - **Повторное использование** — один и тот же сервис используют все модули,
   каждому не нужно заново реализовывать загрузку, удаление и учёт файлов.
-- **Абстрагирование** — наружу виден контракт; S3, параллельная загрузка файла по частям и служебные детали
-  скрыты внутри.
-- **Автономность** — сервис сам управляет своим состоянием, статусами и
-  восстановлением после сбоев.
-
-При этом это **не классическая СОА** с центральной шиной и общей базой данных.
-У сервиса собственная база, а интеграция идёт по контракту. Это ближе к модели
-«сервис владеет своими данными», чем к общей БД предприятия.
-
-Актуальность обеспечивается не тем, что все пишут в одну базу, а тем, что
-**только сервис меняет состояние файлов**, а расхождения лечатся статусами и
-фоновой сверкой.
+- **Абстрагирование** — наружу виден контракт, а реализация протокола S3, параллельная загрузка файла по частям и служебные детали скрыты внутри.
+- **Автономность** — сервис сам управляет своим состоянием, статусами и восстановлением после сбоев.
 
 ## Что умеет
 
@@ -281,6 +271,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ├── .env.example                           # шаблон секретов и настроек compose
 ├── docker/
 │   ├── filestash/config.json              # seed-конфиг Filestash
+│   ├── otel-collector/config.yaml         # приём OTLP и экспорт телеметрии
 │   └── swagger/                           # Swagger UI для S3/Swift API
 │       ├── nginx.conf                     # прокси /api → swift:8080
 │       ├── openapi.yaml                   # контракт S3/Swift (копия из reon-s3-dev)
@@ -831,6 +822,8 @@ docker compose up -d
 - Swagger UI для S3/Swift API: http://localhost:8081
 - Filestash: http://localhost:8082 (админка `/admin`, `admin` / `admin`)
 - Postgres: localhost:5433, БД `reon`, пользователь `reon`
+- OpenTelemetry Collector: OTLP gRPC `localhost:4317`, OTLP HTTP
+  `localhost:4318`, health `http://localhost:13133`
 
 Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь только запуск
 образа `swift-s3api-aio:2.33` (переопределяется через `SWIFT_IMAGE`).
@@ -899,6 +892,30 @@ docker build --build-arg PUBLISH_PROFILE=Prod -t reon-s3-api:local .
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.api.yml \
   --profile api stop api
+```
+
+### OpenTelemetry Collector
+
+`docker compose up -d` поднимает `otel-collector` вместе с остальной
+инфраструктурой. Он принимает телеметрию по OTLP:
+
+- gRPC: `localhost:4317`, из контейнеров — `http://otel-collector:4317`;
+- HTTP: `localhost:4318`;
+- health: `http://localhost:13133`.
+
+Конфигурация — `docker/otel-collector/config.yaml`. Сейчас включён экспортёр
+`debug`: принятые данные печатаются в лог коллектора, поэтому его удобно
+использовать для проверки интеграции. Для реального backend добавьте
+экспортёр (`otlp`, `loki`, `prometheusremotewrite` и т. п.) и подключите его
+в нужном pipeline.
+
+Проверка приёма по OTLP HTTP:
+
+```bash
+curl -X POST http://localhost:4318/v1/logs \
+  -H "Content-Type: application/json" \
+  -d '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"ping"}}]}]}]}'
+docker logs reon-s3-otel-collector --tail 5
 ```
 
 ### Миграции
@@ -1115,9 +1132,8 @@ S3-слой дополнительно проверен вручную прот�
   `dotnet run`): человекочитаемые строки
   `[12:34:56 INF] Сообщение`, как раньше.
 - **Production, Staging и остальные окружения**: компактный JSON (NDJSON) —
-  по одному объекту на строку в stdout. Его читает OpenTelemetry Collector
-  из stdout контейнера. stderr остаётся только для аварийных сообщений хоста
-  до инициализации логгера.
+  по одному объекту на строку в stdout. stderr остаётся только для аварийных
+  сообщений хоста до инициализации логгера.
 
 Формат выбирается по `ASPNETCORE_ENVIRONMENT`, а не по конфигурации сборки
 (`Debug`/`Release`): в контейнере важен именно `ASPNETCORE_ENVIRONMENT`.
@@ -1127,7 +1143,9 @@ S3-слой дополнительно проверен вручную прот�
 Поля событий Serilog: `@t` — время, `@mt` — шаблон сообщения, `@l` — уровень,
 `@x` — исключение, `@tr`/`@sp` — trace/span, остальные свойства события
 (`RequestMethod`, `RequestPath`, `StatusCode`, `Elapsed` и т. п.) лежат
-в корне объекта. Пример приёма логов Docker-контейнера:
+в корне объекта. OpenTelemetry Collector из `docker-compose.yml` принимает
+OTLP; чтобы дополнительно собирать stdout-логи Docker-контейнеров, добавьте
+в его конфиг `filelog` receiver и смонтируйте каталог логов демона — пример:
 
 ```yaml
 receivers:

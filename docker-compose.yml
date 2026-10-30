@@ -109,6 +109,23 @@ services:
     volumes:
       - filestash-state:/app/data/state
 
+  # OpenTelemetry Collector: общая точка приёма телеметрии.
+  # OTLP gRPC — localhost:4317, OTLP HTTP — localhost:4318,
+  # health_check — http://localhost:13133.
+  # Экспортёр сейчас debug (вывод в лог), реальный backend добавляется
+  # в docker/otel-collector/config.yaml.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    container_name: reon-s3-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13133:13133"
+    volumes:
+      - ./docker/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+
 volumes:
   reon-postgres-data:
   swift-data:
