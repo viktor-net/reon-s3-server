@@ -275,8 +275,10 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ├── Reon.S3.Server.slnx                    # решение: Api, Core, Infrastructure, тесты
 ├── Directory.Build.props                  # общие настройки сборки
 ├── global.json                            # версия .NET SDK
-├── Dockerfile                             # образ API для ручной сборки
+├── Dockerfile                             # образ API (Release или профиль публикации)
 ├── docker-compose.yml                     # Postgres, Swift, Swagger UI, Filestash
+├── docker-compose.api.yml                 # профиль api: API в контейнере
+├── .env.example                           # шаблон секретов и настроек compose
 ├── docker/
 │   ├── filestash/config.json              # seed-конфиг Filestash
 │   └── swagger/                           # Swagger UI для S3/Swift API
@@ -804,7 +806,10 @@ Dev-значения S3 (`test:tester` / `testing`) лежат в `appsettings.D
 ## Запуск
 
 Compose поднимает инфраструктуру — Postgres, Swift, Swagger UI и Filestash.
-API запускается локально из исходников.
+API можно запустить двумя способами:
+
+- локально из исходников — режим по умолчанию, удобен для отладки;
+- в контейнере из `Dockerfile` — прод-подобная проверка, профиль `api`.
 
 ### Инфраструктура
 
@@ -832,13 +837,69 @@ Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь
 Внешних сетей нет. Конфиги Swagger UI и Filestash — в `docker/swagger/`
 и `docker/filestash/`.
 
-### API
+### API локально
 
 ```bash
 dotnet run --project src/Reon.Api
 ```
 
 API слушает `http://localhost:8090`, S3 — `http://localhost:8080`.
+Порты Postgres и Swift опубликованы наружу, поэтому контейнеры
+инфраструктуры доступны с хоста. Это основной режим для отладки:
+точки останова, перезапуск и Scalar работают как обычно.
+
+### API в контейнере (профиль `api`)
+
+Прод-подобный режим: API собирается из `Dockerfile` и работает в одной
+compose-сети с Postgres и Swift. Внутри контейнера используются имена
+сервисов (`postgres:5432`, `swift:8080`), а наружу API опубликован на
+`http://localhost:8090`.
+
+Секреты берутся из `.env` (шаблон — `.env.example`):
+
+```bash
+cp .env.example .env
+```
+
+Сборка образа и запуск:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d --build
+```
+
+Запуск уже собранного образа — без сборки .NET:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d --no-build
+```
+
+Образ должен быть собран заранее: командой `build` или предыдущим запуском
+с `--build`.
+
+Профиль публикации задаётся переменной `API_PUBLISH_PROFILE` — это имя
+файла из `src/Reon.Api/Properties/PublishProfiles` без `.pubxml`:
+
+```bash
+API_PUBLISH_PROFILE=Prod docker compose \
+  -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api up -d --build
+```
+
+Пустое значение — обычная Release-публикация. Для ручной сборки профиль
+передаётся в `docker build`:
+
+```bash
+docker build --build-arg PUBLISH_PROFILE=Prod -t reon-s3-api:local .
+```
+
+Остановить контейнер API, не трогая инфраструктуру:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.api.yml \
+  --profile api stop api
+```
 
 ### Миграции
 
@@ -1101,6 +1162,8 @@ receivers:
 | `502` | Доступность S3, path-style, регион |
 | Scalar UI пустой | Открывайте `http://localhost:8090/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
+| API в контейнере не видит Postgres/Swift | Внутри compose используйте `postgres:5432` и `swift:8080`, а не `localhost`; проверьте `.env` и `docker compose ps` |
+| `Задайте POSTGRES_PASSWORD в .env` | Скопируйте `.env.example` в `.env` и заполните секреты |
 | Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |
 | Миграции не применились | `Database:AutoMigrate` или `dotnet ef database update` |
 | Файл `Missing` | Объект удалён из S3; проверьте бэкап/versioning |

@@ -1,0 +1,56 @@
+# Профиль api: API в контейнере, собранном из Dockerfile.
+#
+# Прод-подобный запуск со сборкой образа:
+#   docker compose -f docker-compose.yml -f docker-compose.api.yml \
+#     --profile api up -d --build
+#
+# Без сборки .NET — запуск уже собранного образа (например, для отладки
+# или быстрого перезапуска):
+#   docker compose -f docker-compose.yml -f docker-compose.api.yml \
+#     --profile api up -d --no-build
+#
+# Без этих файлов `docker compose up -d` поднимает только инфраструктуру,
+# а API запускается на хосте через `dotnet run` для отладки.
+services:
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Имя профиля из src/Reon.Api/Properties/PublishProfiles (без .pubxml).
+        # Пусто — обычная Release-публикация.
+        PUBLISH_PROFILE: ${API_PUBLISH_PROFILE:-}
+    image: ${API_IMAGE:-reon-s3-api:local}
+    container_name: reon-s3-api
+    restart: unless-stopped
+    ports:
+      # Снаружи сохраняем привычный адрес API из README и launchSettings.
+      - "8090:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${API_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: http://+:8080
+      # Внутри compose-сети localhost указывает на сам контейнер,
+      # поэтому обращаемся к сервисам по их именам.
+      ConnectionStrings__Postgres: >-
+        Host=postgres;Port=5432;Database=${POSTGRES_DB:-reon};Username=${POSTGRES_USER:-reon};Password=${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+      S3__ServiceUrl: http://swift:8080
+      S3__AccessKey: ${S3_ACCESS_KEY:?Задайте S3_ACCESS_KEY в .env}
+      S3__SecretKey: ${S3_SECRET_KEY:?Задайте S3_SECRET_KEY в .env}
+      S3__Region: ${S3_REGION:-us-east-1}
+      S3__BucketName: ${S3_BUCKET_NAME:-reon-files}
+      S3__ForcePathStyle: "true"
+      Database__AutoMigrate: ${DATABASE_AUTO_MIGRATE:-true}
+      # Контейнерные логи читает stdout/коллектор, поэтому всегда JSON.
+      Serilog__Console__Json: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      swift:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s

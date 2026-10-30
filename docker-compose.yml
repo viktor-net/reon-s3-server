@@ -1,18 +1,26 @@
+# Базовая инфраструктура для локальной разработки и отладки API на хосте:
+#   docker compose up -d
+#
+# Прод-подобный запуск API в контейнере — отдельный профиль api:
+#   docker compose -f docker-compose.yml -f docker-compose.api.yml \
+#     --profile api up -d --build
 services:
   postgres:
     image: postgres:16-alpine
     container_name: reon-s3-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: reon
-      POSTGRES_USER: reon
-      POSTGRES_PASSWORD: reon_dev_password
+      # Значения по умолчанию — для локального стенда. Для контейнера API
+      # те же переменные читает профиль api из docker-compose.api.yml.
+      POSTGRES_DB: ${POSTGRES_DB:-reon}
+      POSTGRES_USER: ${POSTGRES_USER:-reon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reon_dev_password}
     ports:
       - "5433:5432"
     volumes:
       - reon-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reon -d reon"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reon} -d ${POSTGRES_DB:-reon}"]
       interval: 5s
       timeout: 5s
       retries: 20
