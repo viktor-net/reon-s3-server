@@ -85,6 +85,11 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
         {
             LogStorageFailure(logger, exception);
         }
+        else if (exception is FileExpiredException)
+        {
+            // 410 — ожидаемый ответ, а не ошибка: не пишем стек в журнал.
+            LogExpiredRequest(logger);
+        }
         else
         {
             LogHandledException(
@@ -108,12 +113,20 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
         };
         problem.Extensions["traceId"] = httpContext.TraceIdentifier;
 
+        if (exception is FileExpiredException)
+        {
+            problem.Extensions["code"] = "FILE_EXPIRED";
+        }
+
         await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
         return true;
     }
 
     [LoggerMessage(EventId = 3001, Level = LogLevel.Error, Message = "Object storage operation failed.")]
     private static partial void LogStorageFailure(ILogger logger, Exception exception);
+
+    [LoggerMessage(EventId = 3003, Level = LogLevel.Information, Message = "Request rejected because the file expired.")]
+    private static partial void LogExpiredRequest(ILogger logger);
 
     [LoggerMessage(
         EventId = 3002,
