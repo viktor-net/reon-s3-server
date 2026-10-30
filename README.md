@@ -42,6 +42,8 @@
 ## Что умеет
 
 - Загрузка файла с возвратом `fileId`.
+- Необязательный срок хранения (`retentionSeconds`): просроченный файл отвечает
+  `410`, а фоновый сборщик удаляет объект из S3.
 - Скачивание файла, `HEAD` и получение описания.
 - Список файлов с фильтрами, сортировкой и страницами.
 - Изменение имени, описания и тегов без перезагрузки файла.
@@ -402,8 +404,10 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ### Статусы
 
 ```
-Pending → Ready → Deleting → Deleted
-   |         |
+Pending → Ready → Expired → Deleted
+   |         |        ↑
+   |         |        └── retention_hold снят или срок продлён → Ready
+   |         → Deleting → Deleted
    |         → Missing   (объект пропал из S3)
    |         → Corrupted (размер/хеш не совпали)
    → Failed
@@ -413,6 +417,7 @@ Pending → Ready → Deleting → Deleted
 |---|---|
 | `Pending` | Строка создана, объект ещё не подтверждён |
 | `Ready` | Объект загружен, метаданные подтверждены, файл можно отдавать |
+| `Expired` | Срок хранения истёк, API отвечает `410`; объект ещё может лежать в S3 до прохода сборщика |
 | `Deleting` | Удаление из S3 начато или повторяется |
 | `Deleted` | Объект удалён, строка оставлена для аудита |
 | `Failed` | Загрузка не удалась, объект удалён или не создан |
@@ -428,6 +433,10 @@ Pending → Ready → Deleting → Deleted
 | Есть строка `Pending`, объект в S3 есть | Сверка проверяет `reon-file-id`, размер и `reon-sha256`. Совпало — `Ready`; не совпало — объект удаляется, строка становится `Failed`. |
 | Есть строка `Pending`, объекта в S3 нет | Строка становится `Failed`. |
 | Есть строка `Deleting`, объект ещё есть | Фоновая сверка повторяет удаление. |
+| Есть строка `Ready`, `expires_at` наступил | API отвечает `410` сразу, не дожидаясь сборщика; сборщик переводит строку в `Expired`, затем удаляет объект и ставит `Deleted`. |
+| Есть строка `Expired`, объект ещё есть | Штатное состояние до прохода сборщика. Сборщик повторяет удаление; строка остаётся владельцем объекта, orphan sweep её не трогает. |
+| `retention_hold = true` | Срок может наступить, но файл остаётся доступным и сборщик его не удаляет. Снятие hold возвращает `Expired` в `Ready`, если объект ещё цел. |
+| `retention_hold = true`, но объект уже удалён | Файл остаётся `Expired`/`Deleted`; hold не восстанавливает байты. |
 | Есть строка `Failed`/`Corrupted`, объект ещё есть | Orphan sweep удаляет объект после grace period: такая строка не считается владельцем. |
 | Есть строка `Deleted`, объект ещё есть | Orphan sweep удаляет объект после grace period: удалённая строка больше не считается владельцем. |
 | `Ready`, размер/хеш не совпали | Пометка `Corrupted`, файл не отдаётся, ошибка в лог. |
@@ -467,12 +476,17 @@ Swift s3api не поддерживает весь S3-функционал, а L
 ```bash
 curl -X POST http://localhost:8090/api/files \
   -F "file=@hello.txt" \
-  -F 'metadata={"originalName":"hello.txt","contentType":"text/plain","description":"greeting","tags":{"kind":"demo"}}'
+  -F 'metadata={"originalName":"hello.txt","contentType":"text/plain","description":"greeting","tags":{"kind":"demo"},"retentionSeconds":2592000}'
 ```
 
 `metadata` — необязательная JSON-строка. Поля: `originalName`, `contentType`,
-`description`, `tags`. Если `originalName`/`contentType` не переданы, берутся из
-части `multipart/form-data`.
+`description`, `tags`, `retentionSeconds`. Если `originalName`/`contentType` не
+переданы, берутся из части `multipart/form-data`.
+
+`retentionSeconds` — относительный срок хранения в секундах. Сервер сам считает
+`expiresAt` и проверяет верхнюю границу `FileStorage:MaxRetentionDays`. Если поле
+не передано, применяется `FileStorage:DefaultRetentionDays` (`0` — бессрочно).
+Абсолютную дату клиент передать не может.
 
 Ответ `201 Created`:
 
@@ -492,9 +506,14 @@ curl -X POST http://localhost:8090/api/files \
   "failureReason": null,
   "createdAt": "2026-10-28T12:00:00+00:00",
   "completedAt": "2026-10-28T12:00:00+00:00",
-  "updatedAt": "2026-10-28T12:00:00+00:00"
+  "updatedAt": "2026-10-28T12:00:00+00:00",
+  "expiresAt": "2026-11-27T12:00:00+00:00",
+  "retentionHold": false
 }
 ```
+
+`expiresAt = null` означает бессрочное хранение. `retentionHold = true` запрещает
+удаление по сроку, не меняя `expiresAt`.
 
 ### Получение файла
 
@@ -508,14 +527,20 @@ curl -OJ http://localhost:8090/api/files/{fileId}
 имя без расширения, расширение не появится: сервер не угадывает формат по
 содержимому. Range-запросы не поддерживаются.
 
+Если срок хранения истёк, возвращается `410 Gone` с `code = FILE_EXPIRED`.
+Проверка идёт по `expires_at` и `retention_hold` в Postgres, поэтому файл
+перестаёт отдаваться сразу, даже если объект ещё не удалён из S3.
+
 ### Получение метаданных
 
 ```bash
 curl http://localhost:8090/api/files/{fileId}/metadata
 ```
 
-Метаданные доступны для статусов `Pending`, `Ready`, `Deleting`, `Failed`,
-`Missing`, `Corrupted`. Для `Deleted` и отсутствующего `fileId` — 404.
+Метаданные доступны для статусов `Pending`, `Ready`, `Expired`, `Deleting`,
+`Failed`, `Missing`, `Corrupted`. Для `Deleted` и отсутствующего `fileId` — 404.
+Для просроченного файла описание отдаётся со `status = Expired`, чтобы UI мог
+показать срок и предложить продление.
 
 ### Удаление
 
@@ -541,7 +566,7 @@ curl 'http://localhost:8090/api/files?page=1&pageSize=50&status=Ready&sort=-crea
 
 Фильтры:
 
-- `status` — `Pending`, `Ready`, `Deleting`, `Failed`, `Missing`, `Corrupted`.
+- `status` — `Pending`, `Ready`, `Expired`, `Deleting`, `Failed`, `Missing`, `Corrupted`.
 - `contentType` — точное совпадение.
 - `originalName` — поиск подстроки по имени.
 - `createdFrom`, `createdTo` — границы по времени создания.
@@ -566,7 +591,7 @@ curl -I http://localhost:8090/api/files/{fileId}
 ```
 
 Возвращает `Content-Type`, `Content-Length`, `ETag` без тела. Если файл не
-`Ready`, будет `409`.
+`Ready`, будет `409`; если срок хранения истёк — `410`.
 
 ### Изменение описания
 
@@ -586,10 +611,13 @@ curl -X PATCH http://localhost:8090/api/files/{fileId}/metadata \
 ```bash
 curl -X POST http://localhost:8090/api/files/{fileId}/copy \
   -H 'Content-Type: application/json' \
-  -d '{"originalName":"copy.png","description":"копия"}'
+  -d '{"originalName":"copy.png","description":"копия","retentionSeconds":2592000}'
 ```
 
-Создаёт новый `fileId`, копирует объект в S3 и описание в Postgres.
+Создаёт новый `fileId`, копирует объект в S3 и описание в Postgres. Копия
+получает собственный срок хранения: `retentionSeconds` из тела или
+`FileStorage:DefaultRetentionDays`, а не остаток срока исходного файла.
+Копирование просроченного исходника возвращает `410`.
 
 ### Массовое удаление
 
@@ -612,7 +640,7 @@ S3-авторизация остаются внутри сервиса; клие
 ```bash
 curl -X POST http://localhost:8090/api/uploads \
   -H 'Content-Type: application/json' \
-  -d '{"originalName":"big.bin","contentType":"application/octet-stream","description":"большой файл"}'
+  -d '{"originalName":"big.bin","contentType":"application/octet-stream","description":"большой файл","retentionSeconds":604800}'
 ```
 
 Ответ `201 Created`:
@@ -626,9 +654,14 @@ curl -X POST http://localhost:8090/api/uploads \
   "minPartSize": 5242880,
   "maxParts": 10000,
   "expiresAt": "2026-11-05T10:00:00+00:00",
-  "parts": []
+  "parts": [],
+  "retentionSeconds": 604800
 }
 ```
+
+`expiresAt` в ответе сессии — срок жизни **самой загрузки**, а не будущего
+файла. `retentionSeconds` — срок хранения файла; он применяется при завершении,
+поэтому длительная загрузка не сокращает срок жизни файла.
 
 2. Загрузить часть:
 
@@ -655,7 +688,8 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/complete
 ```
 
 Ответ `201 Created` с обычными метаданными файла. Сервис проверяет размер,
-считает SHA-256, создаёт запись в Postgres и возвращает `fileId`.
+считает SHA-256, создаёт запись в Postgres и возвращает `fileId` и `expiresAt`.
+Срок хранения отсчитывается от момента завершения загрузки.
 
 5. Прервать загрузку:
 
@@ -694,10 +728,10 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 
 | Код | Когда |
 |---|---|
-| `400` | Пустой файл, неверный JSON metadata, превышены лимиты тегов/описания |
+| `400` | Пустой файл, неверный JSON metadata, превышены лимиты тегов/описания, неверный `retentionSeconds` |
 | `404` | Файл не найден или удалён |
 | `409` | Файл не `Ready`, параллельная загрузка файла по частям уже завершена/прервана или неактивна |
-| `410` | Параллельная загрузка файла по частям истекла |
+| `410` | Истёк срок хранения файла (`FILE_EXPIRED`) или сессия параллельной загрузки |
 | `411` | Для части не передан `Content-Length` |
 | `413` | Файл больше `FileStorage:MaxFileSizeBytes` |
 | `502` | S3 недоступен |
@@ -735,6 +769,10 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 | `FileStorage:OrphanSweepIntervalMinutes` | `360` | Интервал очистки orphan |
 | `FileStorage:OrphanGracePeriodHours` | `24` | Grace period для orphan |
 | `FileStorage:DeletedRetentionDays` | `30` | Сколько хранить soft-deleted строки |
+| `FileStorage:DefaultRetentionDays` | `0` | Срок хранения новых файлов по умолчанию; `0` — бессрочно |
+| `FileStorage:MaxRetentionDays` | `3650` | Верхняя граница `retentionSeconds`; `0` — без ограничения |
+| `FileStorage:RetentionSweepIntervalMinutes` | `60` | Как часто сборщик переводит просроченные файлы в `Expired` |
+| `FileStorage:RetentionSweepBatchSize` | `1000` | Сколько строк обрабатывать за один проход сборщика |
 | `Admin:UsageCacheSeconds` | `60` | Кеш рассчитанного использования бакета |
 | `Admin:MaxPageSize` | `200` | Максимальный размер страницы админ-списков |
 | `Admin:MaxPresignedUrlLifetimeSeconds` | `604800` | Максимальный срок presigned URL (7 дней) |
@@ -835,6 +873,9 @@ created_at timestamptz
 updated_at timestamptz
 completed_at timestamptz
 deleted_at timestamptz
+expires_at timestamptz          -- null = бессрочно
+retention_hold boolean          -- запрет на удаление по сроку
+expired_at timestamptz          -- когда файл перешёл в Expired
 ```
 
 `owner` — служебное поле, сейчас всегда `system`; для проверки доступа оно не
@@ -851,6 +892,7 @@ multipart_uploads
   description, tags jsonb, owner
   status varchar(32)
   created_at, updated_at, expires_at, completed_at
+  retention_seconds int          -- срок хранения будущего файла; null = бессрочно
   failure_reason varchar(1000)
 
 multipart_upload_parts
@@ -870,7 +912,13 @@ multipart_upload_parts
 - `ix_files_owner` — служебный индекс; для доступа сейчас не используется.
 - `ix_files_status_created_at`, `ix_files_created_at` — список и сортировка.
 - `ix_files_content_type`, `ix_files_original_name` — фильтры списка.
+- `ix_files_retention_due` — выборка `Ready` с наступившим `expires_at`, partial index.
+- `ix_files_status_expired_at` — выборка `Expired` для удаления из S3, partial index.
 - `ix_multipart_uploads_status_expires_at` — очистка зависших загрузок.
+
+Таблицы и колонки описаны DDL-комментариями (`COMMENT ON TABLE/COLUMN`); они
+применяются миграцией `AddDatabaseComments` и видны в `psql` и клиентах БД.
+Подробная модель взаимодействия Postgres и S3 — в `docs/database-and-s3.md`.
 
 Административные таблицы:
 
@@ -929,7 +977,8 @@ dotnet test
 ```
 
 Unit-тесты покрывают успешную загрузку, ошибку S3, потерю объекта, удаление,
-превышение размера и сессии параллельной загрузки файла по частям. Всего 8 тестов.
+превышение размера, сессии параллельной загрузки файла по частям, срок
+хранения и переходы `Expired`/`retention_hold`. Всего 42 теста.
 
 S3-слой дополнительно проверен вручную против `swift-s3api`: создание бакета,
 `PutObject`, `HeadObject` с metadata, `GetObject`, `DeleteObject`,
@@ -951,13 +1000,15 @@ S3-слой дополнительно проверен вручную прот�
 | Формат метаданных и ошибок | JSON; ошибки — RFC 9457 ProblemDetails |
 | Формат содержимого | Бинарный поток, без base64 |
 | Удаление | Soft delete в Postgres + удаление объекта из S3; ответ 204/202 |
+| Срок хранения | TTL в Postgres (`expires_at`), `410` на чтении и фоновый сборщик; S3 lifecycle на `files/` не используется |
+| Просроченный файл | Статус `Expired`, ответ `410`; объект удаляется сборщиком, строка остаётся для аудита |
 | Повторное удаление | Идемпотентно: 204, если уже удалён |
 | Перезапись | Нет: каждый upload создаёт новый `fileId` |
 | Листинг | Есть: `GET /api/files` с фильтрами и страницами |
 | Range, presigned URL, S3 versioning | Нет |
 | Максимальный размер | 1 GiB, настраивается |
 | Параллельная загрузка | Автоматическая для простой загрузки >64 MiB и явные сессии `/api/uploads` |
-| Один инстанс или несколько | Несколько инстансов безопасны: сверка берёт Postgres advisory lock |
+| Один инстанс или несколько | Несколько инстансов безопасны: сверка и сборщик retention берут Postgres advisory lock |
 
 ## Осознанные ограничения
 
@@ -972,8 +1023,10 @@ S3-слой дополнительно проверен вручную прот�
   или отдельный поисковый индекс.
 - Если объект физически потерян, сервис фиксирует `Missing`, но не восстанавливает
   байты. Для восстановления нужен backup или S3 versioning.
-- Orphan sweep загружает все активные `fileId` (`Pending`/`Ready`) из Postgres в память.
+- Orphan sweep загружает все активные `fileId` (`Pending`/`Ready`/`Expired`) из Postgres в память.
   Для очень больших каталогов замените его на постраничное сравнение или S3 Inventory.
+- S3 lifecycle на `files/` не используется: правило не различает бессрочные и
+  временные объекты. Срок хранения обеспечивает сервис, а не S3.
 
 ## Логи
 
