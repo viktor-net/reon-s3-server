@@ -10,7 +10,7 @@ public sealed class FileMetadataConfiguration : IEntityTypeConfiguration<FileMet
         {
             table.HasCheckConstraint(
                 "ck_files_status",
-                "\"status\" IN ('Pending', 'Ready', 'Deleting', 'Deleted', 'Failed', 'Missing', 'Corrupted')");
+                "\"status\" IN ('Pending', 'Ready', 'Deleting', 'Deleted', 'Failed', 'Missing', 'Corrupted', 'Expired')");
         });
 
         builder.HasKey(file => file.Id);
@@ -103,6 +103,19 @@ public sealed class FileMetadataConfiguration : IEntityTypeConfiguration<FileMet
             .HasColumnName("deleted_at")
             .HasColumnType("timestamptz");
 
+        builder.Property(file => file.ExpiresAt)
+            .HasColumnName("expires_at")
+            .HasColumnType("timestamptz");
+
+        builder.Property(file => file.RetentionHold)
+            .HasColumnName("retention_hold")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(file => file.ExpiredAt)
+            .HasColumnName("expired_at")
+            .HasColumnType("timestamptz");
+
         builder.HasIndex(file => new { file.Bucket, file.ObjectKey })
             .IsUnique()
             .HasDatabaseName("ux_files_bucket_object_key");
@@ -128,5 +141,13 @@ public sealed class FileMetadataConfiguration : IEntityTypeConfiguration<FileMet
 
         builder.HasIndex(file => file.Owner)
             .HasDatabaseName("ix_files_owner");
+
+        builder.HasIndex(file => file.ExpiresAt)
+            .HasDatabaseName("ix_files_retention_due")
+            .HasFilter("\"status\" = 'Ready' AND \"retention_hold\" = false");
+
+        builder.HasIndex(file => new { file.Status, file.ExpiredAt })
+            .HasDatabaseName("ix_files_status_expired_at")
+            .HasFilter("\"status\" = 'Expired'");
     }
 }

@@ -55,6 +55,7 @@ public sealed partial class FileStorageService
         var contentType = NormalizeContentType(command.ContentType);
         var description = NormalizeDescription(command.Description);
         var tags = NormalizeTags(command.Tags);
+        var retention = _options.ResolveRetention(command.RetentionSeconds);
 
         var fileId = Guid.CreateVersion7();
         var objectKey = $"{_options.KeyPrefix}{fileId:N}{GetSafeExtension(originalName)}";
@@ -69,6 +70,7 @@ public sealed partial class FileStorageService
         await _quotaGuard.EnsureCanWriteAsync(_objectStorage.BucketName, tempFile.Size, cancellationToken);
 
         var now = _clock.UtcNow;
+        var expiresAt = retention is { } lifetime ? now + lifetime : (DateTimeOffset?)null;
         var file = FileMetadata.CreatePending(
             fileId,
             bucket: _objectStorage.BucketName,
@@ -81,7 +83,8 @@ public sealed partial class FileStorageService
             description: description,
             tags: tags,
             version: 1,
-            now: now);
+            now: now,
+            expiresAt: expiresAt);
 
         await _repository.AddAsync(file, cancellationToken);
         await _repository.SaveChangesAsync(cancellationToken);
@@ -147,6 +150,11 @@ public sealed partial class FileStorageService
     {
         var file = await GetExistingFileAsync(fileId, cancellationToken);
 
+        if (file.Status == FileStatus.Expired || file.IsExpired(_clock.UtcNow))
+        {
+            throw new FileExpiredException(file.Id, file.ExpiresAt);
+        }
+
         if (file.Status != FileStatus.Ready)
         {
             throw new FileNotReadyException(file.Id, file.Status);
@@ -186,6 +194,11 @@ public sealed partial class FileStorageService
         CancellationToken cancellationToken)
     {
         var file = await GetExistingFileAsync(fileId, cancellationToken);
+        if (file.Status == FileStatus.Expired || file.IsExpired(_clock.UtcNow))
+        {
+            throw new FileExpiredException(file.Id, file.ExpiresAt);
+        }
+
         if (file.Status != FileStatus.Ready)
         {
             throw new FileNotReadyException(file.Id, file.Status);
@@ -215,10 +228,17 @@ public sealed partial class FileStorageService
         CancellationToken cancellationToken)
     {
         var source = await GetExistingFileAsync(sourceFileId, cancellationToken);
+        if (source.Status == FileStatus.Expired || source.IsExpired(_clock.UtcNow))
+        {
+            throw new FileExpiredException(source.Id, source.ExpiresAt);
+        }
+
         if (source.Status != FileStatus.Ready)
         {
             throw new FileNotReadyException(source.Id, source.Status);
         }
+
+        var retention = _options.ResolveRetention(command.RetentionSeconds);
 
         var originalName = command.OriginalName is null
             ? source.OriginalName
@@ -235,6 +255,7 @@ public sealed partial class FileStorageService
         var fileId = Guid.CreateVersion7();
         var objectKey = FileInput.BuildObjectKey(fileId, originalName, _options);
         var now = _clock.UtcNow;
+        var expiresAt = retention is { } lifetime ? now + lifetime : (DateTimeOffset?)null;
 
         var stored = await _objectStorage.CopyAsync(
             source.ObjectKey,
@@ -260,7 +281,8 @@ public sealed partial class FileStorageService
             description,
             tags,
             version: 1,
-            now: now);
+            now: now,
+            expiresAt: expiresAt);
 
         try
         {

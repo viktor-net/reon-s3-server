@@ -30,6 +30,22 @@ public static class DependencyInjection
             .Validate(
                 options => options.MultipartThresholdBytes >= 5 * 1024 * 1024,
                 "FileStorage:MultipartThresholdBytes must be at least 5 MiB.")
+            .Validate(
+                options => options.DefaultRetentionDays >= 0 && options.MaxRetentionDays >= 0,
+                "FileStorage retention days must not be negative.")
+            .Validate(
+                options => options.MaxRetentionDays == 0 || options.MaxRetentionDays <= 3650,
+                "FileStorage:MaxRetentionDays must be 0 or at most 3650.")
+            .Validate(
+                options => options.MaxRetentionDays == 0 ||
+                           options.DefaultRetentionDays <= options.MaxRetentionDays,
+                "FileStorage:DefaultRetentionDays must not exceed MaxRetentionDays.")
+            .Validate(
+                options => options.RetentionSweepIntervalMinutes > 0,
+                "FileStorage:RetentionSweepIntervalMinutes must be positive.")
+            .Validate(
+                options => options.RetentionSweepBatchSize > 0,
+                "FileStorage:RetentionSweepBatchSize must be positive.")
             .ValidateOnStart();
 
         services.AddOptions<AdminOptions>()

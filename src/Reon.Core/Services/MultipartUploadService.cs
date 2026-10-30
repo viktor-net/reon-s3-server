@@ -57,9 +57,11 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
         string? contentType,
         string? description,
         IReadOnlyDictionary<string, string>? tags,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? retentionSeconds = null)
     {
         var input = FileInput.Normalize(originalName, contentType, description, tags, _options);
+        var retention = _options.ResolveRetention(retentionSeconds);
         var fileId = Guid.CreateVersion7();
         var objectKey = FileInput.BuildObjectKey(fileId, input.OriginalName, _options);
         var now = _clock.UtcNow;
@@ -86,7 +88,8 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
             input.Tags,
             _options.DefaultOwner,
             now,
-            expiresAt);
+            expiresAt,
+            retention is { } value ? checked((int)value.TotalSeconds) : null);
 
         await _uploadRepository.AddAsync(upload, cancellationToken);
 
@@ -257,6 +260,8 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
             var info = await _objectStorage.HeadAsync(upload.ObjectKey, cancellationToken);
             var size = info?.Size ?? parts.Sum(part => part.Size);
             var sha256 = await ComputeSha256Async(upload.ObjectKey, cancellationToken);
+            var retention = _options.ResolveRetention(upload.RetentionSeconds);
+            var expiresAt = retention is { } value ? now + value : (DateTimeOffset?)null;
 
             var file = FileMetadata.CreatePending(
                 upload.FileId,
@@ -270,7 +275,8 @@ public sealed partial class MultipartUploadService : IMultipartUploadService
                 upload.Description,
                 upload.Tags,
                 version: 1,
-                now: now);
+                now: now,
+                expiresAt: expiresAt);
 
             await _fileRepository.AddAsync(file, cancellationToken);
             await _fileRepository.SaveChangesAsync(cancellationToken);

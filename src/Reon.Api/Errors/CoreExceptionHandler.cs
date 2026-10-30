@@ -29,6 +29,10 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
                 StatusCodes.Status409Conflict,
                 "Multipart upload is not active",
                 "The multipart upload is already completed, aborted or failed."),
+            FileExpiredException expired => (
+                StatusCodes.Status410Gone,
+                "File expired",
+                $"The file expired at {expired.ExpiresAt:O} and is no longer available."),
             FileNotReadyException => (
                 StatusCodes.Status409Conflict,
                 "File is not ready",

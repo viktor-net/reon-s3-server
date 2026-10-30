@@ -49,6 +49,15 @@ public sealed class FileMetadata
 
     public DateTimeOffset? DeletedAt { get; private set; }
 
+    /// <summary>Момент, после которого файл считается просроченным. null — бессрочно.</summary>
+    public DateTimeOffset? ExpiresAt { get; private set; }
+
+    /// <summary>Запрет на удаление по сроку. Не меняет ExpiresAt, только приостанавливает GC.</summary>
+    public bool RetentionHold { get; private set; }
+
+    /// <summary>Когда файл перешёл в Expired. null, если срок ещё не наступил.</summary>
+    public DateTimeOffset? ExpiredAt { get; private set; }
+
     public static FileMetadata CreatePending(
         Guid id,
         string bucket,
@@ -61,7 +70,9 @@ public sealed class FileMetadata
         string? description,
         JsonDocument? tags,
         int version,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        DateTimeOffset? expiresAt = null,
+        bool retentionHold = false)
     {
         return new FileMetadata
         {
@@ -79,6 +90,8 @@ public sealed class FileMetadata
             Version = version,
             CreatedAt = now,
             UpdatedAt = now,
+            ExpiresAt = expiresAt,
+            RetentionHold = retentionHold,
         };
     }
 
@@ -136,6 +149,87 @@ public sealed class FileMetadata
 
         Status = FileStatus.Missing;
         FailureReason = reason;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Проверяет, истёк ли срок хранения с учётом запрета на удаление.
+    /// Проверка не зависит от статуса: между наступлением ExpiresAt и проходом
+    /// сборщика мусора строка ещё может быть Ready.
+    /// </summary>
+    public bool IsExpired(DateTimeOffset now)
+    {
+        return !RetentionHold && ExpiresAt is { } expiresAt && expiresAt <= now;
+    }
+
+    /// <summary>
+    /// Переводит Ready в Expired. Повторный вызов идемпотентен.
+    /// Файлы под RetentionHold не просрочиваются.
+    /// </summary>
+    public void MarkExpired(DateTimeOffset now)
+    {
+        if (Status is FileStatus.Deleted or FileStatus.Deleting || RetentionHold)
+        {
+            return;
+        }
+
+        if (Status != FileStatus.Ready)
+        {
+            return;
+        }
+
+        if (ExpiresAt is not { } expiresAt || expiresAt > now)
+        {
+            return;
+        }
+
+        Status = FileStatus.Expired;
+        ExpiredAt = now;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Ставит или снимает запрет на удаление по сроку. Снятие запрета с уже
+    /// просроченного файла возвращает его в Ready: байты ещё в S3, и файл
+    /// снова доступен до следующего прохода GC.
+    /// </summary>
+    public void SetRetentionHold(bool hold, DateTimeOffset now)
+    {
+        if (Status is FileStatus.Deleted or FileStatus.Deleting)
+        {
+            throw new InvalidOperationException($"Cannot change retention hold for file {Id} in status {Status}.");
+        }
+
+        RetentionHold = hold;
+
+        if (hold && Status == FileStatus.Expired)
+        {
+            Status = FileStatus.Ready;
+            ExpiredAt = null;
+        }
+
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Меняет срок хранения. Продление уже просроченного файла возвращает его
+    /// в Ready, если новый срок ещё не наступил.
+    /// </summary>
+    public void ExtendRetention(DateTimeOffset? expiresAt, DateTimeOffset now)
+    {
+        if (Status is FileStatus.Deleted or FileStatus.Deleting)
+        {
+            throw new InvalidOperationException($"Cannot change retention for file {Id} in status {Status}.");
+        }
+
+        ExpiresAt = expiresAt;
+
+        if (Status == FileStatus.Expired && (expiresAt is null || expiresAt > now))
+        {
+            Status = FileStatus.Ready;
+            ExpiredAt = null;
+        }
+
         UpdatedAt = now;
     }
 

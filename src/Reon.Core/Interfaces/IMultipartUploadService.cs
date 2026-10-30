@@ -9,7 +9,8 @@ public interface IMultipartUploadService
         string? contentType,
         string? description,
         IReadOnlyDictionary<string, string>? tags,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        int? retentionSeconds = null);
 
     Task<MultipartUploadPart> UploadPartAsync(
         Guid uploadId,

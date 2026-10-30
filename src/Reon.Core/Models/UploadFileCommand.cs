@@ -4,4 +4,5 @@ public sealed record UploadFileCommand(
     string OriginalName,
     string? ContentType,
     string? Description,
-    IReadOnlyDictionary<string, string>? Tags);
+    IReadOnlyDictionary<string, string>? Tags,
+    int? RetentionSeconds = null);

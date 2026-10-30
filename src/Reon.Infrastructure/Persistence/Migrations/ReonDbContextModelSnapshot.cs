@@ -161,6 +161,14 @@ namespace Reon.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("etag");
 
+                    b.Property<DateTimeOffset?>("ExpiredAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("expired_at");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("expires_at");
+
                     b.Property<string>("FailureReason")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
@@ -183,6 +191,12 @@ namespace Reon.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("owner");
+
+                    b.Property<bool>("RetentionHold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("retention_hold");
 
                     b.Property<string>("S3VersionId")
                         .HasMaxLength(256)
@@ -228,6 +242,10 @@ namespace Reon.Infrastructure.Persistence.Migrations
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_files_created_at");
 
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_files_retention_due")
+                        .HasFilter("\"status\" = 'Ready' AND \"retention_hold\" = false");
+
                     b.HasIndex("OriginalName")
                         .HasDatabaseName("ix_files_original_name");
 
@@ -245,12 +263,16 @@ namespace Reon.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_files_status_deleted_at")
                         .HasFilter("\"status\" = 'Deleted'");
 
+                    b.HasIndex("Status", "ExpiredAt")
+                        .HasDatabaseName("ix_files_status_expired_at")
+                        .HasFilter("\"status\" = 'Expired'");
+
                     b.HasIndex("Status", "UpdatedAt")
                         .HasDatabaseName("ix_files_status_updated_at");
 
                     b.ToTable("files", null, t =>
                         {
-                            t.HasCheckConstraint("ck_files_status", "\"status\" IN ('Pending', 'Ready', 'Deleting', 'Deleted', 'Failed', 'Missing', 'Corrupted')");
+                            t.HasCheckConstraint("ck_files_status", "\"status\" IN ('Pending', 'Ready', 'Deleting', 'Deleted', 'Failed', 'Missing', 'Corrupted', 'Expired')");
                         });
                 });
 
@@ -315,6 +337,10 @@ namespace Reon.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("owner");
+
+                    b.Property<int?>("RetentionSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("retention_seconds");
 
                     b.Property<string>("Status")
                         .IsRequired()

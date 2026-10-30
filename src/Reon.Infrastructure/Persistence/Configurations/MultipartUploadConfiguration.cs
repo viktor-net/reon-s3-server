@@ -85,6 +85,9 @@ public sealed class MultipartUploadConfiguration : IEntityTypeConfiguration<Mult
             .HasColumnType("timestamptz")
             .IsRequired();
 
+        builder.Property(upload => upload.RetentionSeconds)
+            .HasColumnName("retention_seconds");
+
         builder.Property(upload => upload.CompletedAt)
             .HasColumnName("completed_at")
             .HasColumnType("timestamptz");

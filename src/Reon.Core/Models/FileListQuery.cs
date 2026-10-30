@@ -27,4 +27,5 @@ public sealed record StorageStats(
 public sealed record CopyFileCommand(
     string? OriginalName,
     string? Description,
-    IReadOnlyDictionary<string, string>? Tags);
+    IReadOnlyDictionary<string, string>? Tags,
+    int? RetentionSeconds = null);

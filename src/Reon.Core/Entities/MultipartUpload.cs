@@ -39,6 +39,10 @@ public sealed class MultipartUpload
 
     public DateTimeOffset ExpiresAt { get; private set; }
 
+    /// <summary>Срок хранения будущего файла в секундах. null — бессрочно.
+    /// Применяется при завершении загрузки, а не при её начале.</summary>
+    public int? RetentionSeconds { get; private set; }
+
     public DateTimeOffset? CompletedAt { get; private set; }
 
     public string? FailureReason { get; private set; }
@@ -55,7 +59,8 @@ public sealed class MultipartUpload
         JsonDocument? tags,
         string owner,
         DateTimeOffset now,
-        DateTimeOffset expiresAt)
+        DateTimeOffset expiresAt,
+        int? retentionSeconds = null)
     {
         return new MultipartUpload
         {
@@ -73,6 +78,7 @@ public sealed class MultipartUpload
             CreatedAt = now,
             UpdatedAt = now,
             ExpiresAt = expiresAt,
+            RetentionSeconds = retentionSeconds,
         };
     }
 

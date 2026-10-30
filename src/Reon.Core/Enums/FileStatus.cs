@@ -13,4 +13,8 @@ public enum FileStatus
     Failed = 4,
     Missing = 5,
     Corrupted = 6,
+
+    /// <summary>Срок хранения истёк: содержимое ещё может лежать в S3 до очистки,
+    /// но API уже не отдаёт файл и отвечает 410.</summary>
+    Expired = 7,
 }

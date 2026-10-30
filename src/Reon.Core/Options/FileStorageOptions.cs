@@ -55,6 +55,19 @@ public sealed class FileStorageOptions
     /// <summary>Мягко удалённые строки очищаются через столько дней. 0 — хранить вечно.</summary>
     public int DeletedRetentionDays { get; set; } = 30;
 
+    /// <summary>Срок хранения новых файлов по умолчанию. 0 — бессрочно.</summary>
+    public int DefaultRetentionDays { get; set; }
+
+    /// <summary>Верхняя граница срока хранения, которую может запросить клиент.
+    /// 0 — без ограничения.</summary>
+    public int MaxRetentionDays { get; set; } = 3650;
+
+    /// <summary>Как часто фоновый сборщик переводит просроченные файлы в Expired.</summary>
+    public int RetentionSweepIntervalMinutes { get; set; } = 60;
+
+    /// <summary>Сколько строк обрабатывать за один проход сборщика.</summary>
+    public int RetentionSweepBatchSize { get; set; } = 1000;
+
     public int MaxTags { get; set; } = 50;
 
     public int MaxTagKeyLength { get; set; } = 64;
@@ -66,4 +79,33 @@ public sealed class FileStorageOptions
     public int MaxOriginalNameLength { get; set; } = 512;
 
     public int MaxContentTypeLength { get; set; } = 255;
+
+    /// <summary>
+    /// Приводит запрошенный срок хранения к допустимому. null означает
+    /// «бессрочно»; при отсутствии значения берётся DefaultRetentionDays.
+    /// </summary>
+    public TimeSpan? ResolveRetention(int? retentionSeconds)
+    {
+        var seconds = retentionSeconds
+            ?? (DefaultRetentionDays > 0 ? DefaultRetentionDays * 86_400 : (int?)null);
+
+        if (seconds is null)
+        {
+            return null;
+        }
+
+        if (seconds <= 0)
+        {
+            throw new FileValidationException("retentionSeconds must be positive.");
+        }
+
+        var maxSeconds = MaxRetentionDays > 0 ? MaxRetentionDays * 86_400 : int.MaxValue;
+        if (seconds > maxSeconds)
+        {
+            throw new FileValidationException(
+                $"retentionSeconds must not exceed {maxSeconds}.");
+        }
+
+        return TimeSpan.FromSeconds(seconds.Value);
+    }
 }
