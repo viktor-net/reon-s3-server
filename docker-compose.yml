@@ -118,6 +118,8 @@ services:
     image: otel/opentelemetry-collector-contrib:0.164.0
     container_name: reon-s3-otel-collector
     restart: unless-stopped
+    # root нужен, чтобы читать /var/lib/docker/containers для filelog.
+    user: "0:0"
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     ports:
       - "4317:4317"
@@ -125,6 +127,8 @@ services:
       - "13133:13133"
     volumes:
       - ./docker/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # json-file логи контейнеров Docker (на Docker Desktop — внутри VM демона).
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
 
 volumes:
   reon-postgres-data:

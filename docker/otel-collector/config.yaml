@@ -1,9 +1,8 @@
 # OpenTelemetry Collector для локального стенда.
 #
-# Принимает OTLP по gRPC (4317) и HTTP (4318) от API и других сервисов,
-# обрабатывает батчами и печатает в свой лог (экспортёр debug).
-# Для реального backend добавьте экспортёр (otlp, loki, prometheusremotewrite
-# и т. п.) и подключите его в нужном pipeline ниже.
+# Логи: filelog читает json-file контейнеров Docker (Swift, Postgres, API)
+# и разворачивает обёртку docker. Источник определяется по префиксу строки.
+# Трассы и метрики: OTLP от приложений (API отправляет спаны по gRPC 4317).
 
 receivers:
   otlp:
@@ -12,6 +11,48 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+
+  # Логи контейнеров Docker. Коллектор запускается от root: каталог
+  # /var/lib/docker/containers принадлежит root и недоступен обычному uid.
+  # Свои собственные логи исключаем по короткому id контейнера (HOSTNAME),
+  # иначе debug-экспортёр создаст петлю.
+  filelog/docker:
+    include: ["/var/lib/docker/containers/*/*-json.log"]
+    exclude: ["/var/lib/docker/containers/${env:HOSTNAME}*/*"]
+    include_file_path: true
+    start_at: end
+    operators:
+      # {"log": "...", "stream": "stdout", "time": "..."} -> body
+      - type: container
+        format: docker
+        add_metadata_from_filepath: false
+      # Serilog JSON API: разбираем поля и берём время из @t.
+      - type: json_parser
+        if: 'body matches "^\\{"'
+        parse_from: body
+        parse_to: attributes
+        timestamp:
+          parse_from: attributes["@t"]
+          layout_type: gotime
+          layout: 2006-01-02T15:04:05.0000000Z07:00
+      - type: add
+        if: 'attributes["@mt"] != nil'
+        field: attributes["log.source"]
+        value: reon-s3-api
+      - type: move
+        if: 'attributes["@mt"] != nil'
+        from: attributes["@mt"]
+        to: body
+      # Swift пишет ISO-8601 с префиксом "swift ...-server:".
+      - type: add
+        if: 'attributes["log.source"] == nil and body matches "^\\d{4}-\\d{2}-\\d{2}T"'
+        field: attributes["log.source"]
+        value: swift-s3
+      # Postgres: "2026-10-30 10:29:57.269 UTC [1] LOG: ...".
+      - type: add
+        if: 'attributes["log.source"] == nil and body matches "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} \\w+ \\["'
+        field: attributes["log.source"]
+        value: postgres
 
 processors:
   # Ограничивает память, чтобы коллектор не уронил стенд при всплеске.
@@ -23,10 +64,37 @@ processors:
     timeout: 5s
     send_batch_size: 8192
 
+  # Приводит логи к профилю REON-OBS-1.0: service.name по источнику,
+  # общие атрибуты ресурса, severity и связь с трассой.
+  transform/classify:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(resource.attributes["service.name"], attributes["log.source"]) where attributes["log.source"] != nil
+          - set(resource.attributes["service.namespace"], "reon")
+          # API присылает окружение в каждом событии; для Swift/Postgres
+          # это локальный стенд.
+          - set(resource.attributes["deployment.environment.name"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil
+          - set(resource.attributes["deployment.environment.name"], "development") where resource.attributes["deployment.environment.name"] == nil
+          - set(resource.attributes["reon.observability.profile"], "REON-OBS-1.0")
+          - set(severity_text, "INFO") where attributes["@l"] == "Information"
+          - set(severity_text, "WARN") where attributes["@l"] == "Warning"
+          - set(severity_text, "ERROR") where attributes["@l"] == "Error"
+          - set(severity_text, "DEBUG") where attributes["@l"] == "Debug"
+          - set(severity_text, "TRACE") where attributes["@l"] == "Verbose"
+          - set(severity_text, "FATAL") where attributes["@l"] == "Fatal"
+          - set(trace_id, TraceID(attributes["@tr"])) where attributes["@tr"] != nil
+          - set(span_id, SpanID(attributes["@sp"])) where attributes["@sp"] != nil
+
 exporters:
-  debug:
-    # normal показывает содержимое записей; detailed — ещё и все атрибуты.
+  debug/logs:
     verbosity: normal
+  debug/metrics:
+    verbosity: normal
+  # Для локальной проверки спанов печатаем все атрибуты.
+  debug/traces:
+    verbosity: detailed
 
 extensions:
   health_check:
@@ -38,12 +106,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [debug/traces]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [debug/metrics]
     logs:
-      receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [debug]
+      receivers: [otlp, filelog/docker]
+      processors: [memory_limiter, transform/classify, batch]
+      exporters: [debug/logs]
