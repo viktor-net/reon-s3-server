@@ -7,66 +7,21 @@
 
 ## Запуск
 
-Стенд — это контейнеры Postgres, Swift (S3), Swagger UI для Swift, Filestash и
-OpenTelemetry Collector. API запускается двумя способами, и в обоих он
-доступен на `http://localhost:8090`:
+Стенд — это контейнеры Postgres, Swift S3, OpenAPI UI для Swift, Filestash и
+OpenTelemetry Collector. .NET API запускается двумя способами, и в обоих он
+доступен на `localhost:8090`:
 
-| Способ | Что в контейнерах | Где работает API |
-|---|---|---|
-| Отладка в Visual Studio | только инфраструктура | на хосте: точки останова, перезапуск из IDE |
-| Сборка в контейнер | инфраструктура и API из `Dockerfile` | в контейнере: прод-подобная Release-публикация |
+### 1. Отладка в Visual Studio:
 
-Один раз нужен образ Swift из `reon-s3-dev`:
+Поднятие только инфраструктуры:
 
 ```bash
-cd ../reon-s3-dev
-docker compose build swift
-```
-
-### 1. Отладка в Visual Studio: контейнеры без API
-
-Поднимите только инфраструктуру:
-
-```bash
-cd ../reon-s3-server
 docker compose up -d --build
 ```
 
 Сервис `api` в этом режиме не поднимается: он входит в отдельный профиль.
 
-Дальше откройте `Reon.S3.Server.slnx` в Visual Studio, выберите профиль
-запуска `http` и нажмите F5. Профиль задаёт
-`ASPNETCORE_ENVIRONMENT=Development` и адрес `http://localhost:8090`,
-Scalar UI — `http://localhost:8090/scalar/api`.
-
-Настройки запуска на хосте — в `appsettings.Development.json`: Postgres
-`localhost:5433`, S3 `localhost:8080`. Порты контейнеров опубликованы наружу,
-поэтому API из IDE видит их напрямую, а точки останова и перезапуск работают
-как обычно.
-
-Без Visual Studio API запускается из тех же исходников:
-
-```bash
-dotnet run --project src/Reon.Api
-```
-
-Порт `8090` один на всё: если API уже работает в контейнере, остановите его
-или задайте другой адрес, иначе Kestrel упадёт с
-`Failed to bind to address http://[::1]:8090: address already in use`:
-
-```bash
-ASPNETCORE_URLS=http://localhost:8099 dotnet run --project src/Reon.Api \
-  --no-launch-profile
-```
-
 ### 2. Сборка .NET-проекта в контейнер: API вместе со стендом
-
-Перед первым запуском создайте `.env` из шаблона — из него берутся пароль
-Postgres и ключи S3:
-
-```bash
-cp .env.example .env
-```
 
 Поднимите стенд вместе с API:
 
@@ -75,81 +30,29 @@ docker compose -f docker-compose.yml -f docker-compose.api.yml \
   --profile api up -d --build
 ```
 
-API собирается из `Dockerfile` и работает в одной compose-сети с Postgres и
-Swift. Внутри контейнера используются имена сервисов (`postgres:5432`,
-`swift:8080`), наружу API опубликован на `http://localhost:8090`.
-
-Оба `-f` обязательны: `docker-compose.api.yml` — надстройка с одним сервисом
-`api`, а `swift` и `postgres` объявлены в базовом `docker-compose.yml`. Без
-базового файла compose падает с `service "api" depends on undefined service
-"swift"`.
-
-`--profile api` тоже обязателен: сервис `api` включён в профиль, поэтому без
-профиля `docker compose ps` его не покажет и `up` его не поднимет.
-
 ### Адреса стенда
 
-- API: http://localhost:8090, Scalar UI — http://localhost:8090/scalar/api
-- S3: http://localhost:8080
-- Swagger UI для S3/Swift API: http://localhost:8081
-- Filestash: http://localhost:8082 (админка `/admin`, `admin` / `admin`)
+- API: localhost:8090, Scalar UI —localhost:8090/scalar/api
+- S3: localhost:8080
+- Swagger UI для S3/Swift API: localhost:8081
+- Filestash: localhost:8082 (админка `/admin`, `admin` / `admin`)
 - Postgres: localhost:5433, БД `reon`, пользователь `reon`
 - OpenTelemetry Collector: OTLP gRPC `localhost:4317`, OTLP HTTP
-  `localhost:4318`, health `http://localhost:13133`
+  `localhost:4318`, health `localhost:13133`
 
 Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь только запуск
 образа `swift-s3api-aio:2.33` (переопределяется через `SWIFT_IMAGE`).
 Внешних сетей нет. Конфиги Swagger UI и Filestash — в `docker/swagger/`
 и `docker/filestash/`.
 
-### Повторный запуск и остановка API в контейнере
-
-Запуск уже собранного образа — без сборки .NET:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d --no-build
-```
-
-Образ должен быть собран заранее: командой `build` или предыдущим запуском
-с `--build`. Поднять только остановленный API, не трогая инфраструктуру:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d api
-```
-
-Остановить контейнер API, не трогая инфраструктуру:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api stop api
-```
-
-Профиль публикации задаётся переменной `API_PUBLISH_PROFILE` — это имя
-файла из `src/Reon.Api/Properties/PublishProfiles` без `.pubxml`:
-
-```bash
-API_PUBLISH_PROFILE=Prod docker compose \
-  -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d --build
-```
-
-Пустое значение — обычная Release-публикация. Для ручной сборки профиль
-передаётся в `docker build`:
-
-```bash
-docker build --build-arg PUBLISH_PROFILE=Prod -t reon-s3-api:local .
-```
-
 ### OpenTelemetry Collector
 
 `docker compose up -d` поднимает `otel-collector` вместе с остальной
 инфраструктурой. Он принимает телеметрию по OTLP:
 
-- gRPC: `localhost:4317`, из контейнеров — `http://otel-collector:4317`;
+- gRPC: `localhost:4317`, из контейнеров — `otel-collector:4317`;
 - HTTP: `localhost:4318`;
-- health: `http://localhost:13133`.
+- health: `localhost:13133`.
 
 Конфигурация — `docker/otel-collector/config.yaml`. Сейчас включён экспортёр
 `debug`: принятые данные печатаются в лог коллектора, поэтому его удобно
@@ -637,7 +540,7 @@ Swift s3api не поддерживает весь S3-функционал, а L
 
 ## API
 
-Базовый URL в dev: `http://localhost:8090`.
+Базовый URL в dev: `localhost:8090`.
 
 ### Доступ
 
@@ -935,7 +838,7 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 |---|---|---|
 | `ConnectionStrings:Postgres` | — | Строка подключения к Postgres |
 | `Database:AutoMigrate` | `false` | Применять миграции при старте |
-| `S3:ServiceUrl` | `http://localhost:8080` | S3 endpoint |
+| `S3:ServiceUrl` | `localhost:8080` | S3 endpoint |
 | `S3:AccessKey` | — | Access key |
 | `S3:SecretKey` | — | Secret key |
 | `S3:Region` | `us-east-1` | Регион |
@@ -1201,8 +1104,8 @@ OpenTelemetry Collector из `docker-compose.yml` собирает stdout кон
 
 API отправляет спаны напрямую в коллектор по OTLP/gRPC на порт `4317`.
 Адрес задаётся переменной `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose —
-`http://otel-collector:4317`), локально по умолчанию —
-`http://localhost:4317`.
+`otel-collector:4317`), локально по умолчанию —
+`localhost:4317`.
 
 Что попадает в спаны:
 
@@ -1232,12 +1135,12 @@ OTLP-endpoint.
 |---|---|
 | `Could not ensure S3 bucket` | Запущен ли `swift-s3api`, верны ли `S3:ServiceUrl` и креды |
 | `502` | Доступность S3, path-style, регион |
-| Scalar UI пустой | Открывайте `http://localhost:8090/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
+| Scalar UI пустой | Открывайте `localhost:8090/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
 | API в контейнере не видит Postgres/Swift | Внутри compose используйте `postgres:5432` и `swift:8080`, а не `localhost`; проверьте `.env` и `docker compose ps` |
 | `Задайте POSTGRES_PASSWORD в .env` | Скопируйте `.env.example` в `.env` и заполните секреты |
 | `filelog: permission denied` | Коллектор должен работать с `user: "0:0"` и монтировать `/var/lib/docker/containers` |
-| Спаны не приходят в коллектор | Проверьте `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose — `http://otel-collector:4317`), health коллектора `http://localhost:13133` и `docker logs reon-s3-otel-collector` |
+| Спаны не приходят в коллектор | Проверьте `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose — `otel-collector:4317`), health коллектора `localhost:13133` и `docker logs reon-s3-otel-collector` |
 | Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |
 | Миграции не применились | `Database:AutoMigrate` или `dotnet ef database update` |
 | Файл `Missing` | Объект удалён из S3; проверьте бэкап/versioning |
