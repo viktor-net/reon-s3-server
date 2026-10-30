@@ -1,38 +1,63 @@
+using System.Globalization;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using Serilog.Sinks.SystemConsole.Themes;
 
 namespace Reon.Api.Extensions;
 
 /// <summary>
-/// Настройка Serilog: консоль из конфигурации и суточный NDJSON-файл в каталоге logs.
+/// Настройка Serilog: человекочитаемая консоль в Development
+/// и JSON в stdout в остальных окружениях. Файлы не используются.
 /// </summary>
 public static class LoggingExtensions
 {
+    /// <summary>Ключ конфигурации, принудительно включающий или отключающий JSON в консоли.</summary>
+    private const string JsonConsoleSetting = "Serilog:Console:Json";
+
+    /// <summary>Шаблон человекочитаемой строки для локальной разработки.</summary>
+    private const string DevelopmentOutputTemplate =
+        "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+
     /// <summary>
-    /// Подключает Serilog: консоль из конфигурации и суточный NDJSON-файл
-    /// в каталоге logs рядом с решением.
+    /// Подключает Serilog и пишет только в консоль: в Development — текст,
+    /// в остальных окружениях — компактный JSON (по строке на событие) в stdout,
+    /// чтобы его мог читать OpenTelemetry Collector.
     /// </summary>
     /// <param name="builder">Построитель веб-приложения.</param>
     /// <returns>Тот же построитель для цепочки вызовов.</returns>
+    /// <remarks>
+    /// Формат выбирается по <c>ASPNETCORE_ENVIRONMENT</c>, а не по конфигурации
+    /// сборки, чтобы поведение совпадало с окружением контейнера. Значение
+    /// <c>Serilog:Console:Json</c> (или переменная <c>Serilog__Console__Json</c>)
+    /// переопределяет выбор явно.
+    /// </remarks>
     public static WebApplicationBuilder AddReonApiLogging(this WebApplicationBuilder builder)
     {
         builder.Logging.ClearProviders();
 
-        var logDirectory = ResolveLogDirectory(builder.Environment.ContentRootPath);
+        var useJsonConsole = builder.Configuration.GetValue<bool?>(JsonConsoleSetting)
+            ?? !builder.Environment.IsDevelopment();
 
-        builder.Host.UseSerilog((context, services, configuration) => configuration
-            .ReadFrom.Configuration(context.Configuration)
-            .ReadFrom.Services(services)
-            .Enrich.FromLogContext()
-            .WriteTo.File(
-                new CompactJsonFormatter(),
-                Path.Combine(logDirectory, "reon-.ndjson"),
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14,
-                fileSizeLimitBytes: 52_428_800,
-                rollOnFileSizeLimit: true,
-                shared: true));
+        builder.Host.UseSerilog((context, services, configuration) =>
+        {
+            configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext();
+
+            if (useJsonConsole)
+            {
+                configuration.WriteTo.Console(new CompactJsonFormatter());
+            }
+            else
+            {
+                configuration.WriteTo.Console(
+                    outputTemplate: DevelopmentOutputTemplate,
+                    formatProvider: CultureInfo.InvariantCulture,
+                    theme: AnsiConsoleTheme.Code);
+            }
+        });
 
         return builder;
     }
@@ -58,20 +83,5 @@ public static class LoggingExtensions
         });
 
         return app;
-    }
-
-    private static string ResolveLogDirectory(string contentRoot)
-    {
-        var directory = new DirectoryInfo(contentRoot);
-
-        while (directory is not null && !directory.EnumerateFiles("*.slnx").Any())
-        {
-            directory = directory.Parent;
-        }
-
-        var root = directory?.FullName ?? contentRoot;
-        var logs = Path.Combine(root, "logs");
-        Directory.CreateDirectory(logs);
-        return logs;
     }
 }

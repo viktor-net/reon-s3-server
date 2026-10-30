@@ -795,6 +795,7 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 | `Admin:MaxSearchObjects` | `5000` | Сколько объектов сканировать при поиске по подстроке |
 | `Admin:DefaultActor` | `system` | Actor, если не передан `X-Reon-Actor` |
 | `Admin:EventHeartbeatSeconds` | `30` | Интервал heartbeat в WebSocket-потоке |
+| `Serilog:Console:Json` | вне Development — `true` | Формат консоли: JSON в stdout (`true`) или текст (`false`) |
 
 Dev-значения S3 (`test:tester` / `testing`) лежат в `appsettings.Development.json`
 и предназначены только для локального стенда. В production задавайте их через
@@ -1046,9 +1047,47 @@ S3-слой дополнительно проверен вручную прот�
 
 ## Логи
 
-Serilog пишет в терминал человекочитаемые строки, а в
-`logs/reon-YYYYMMDD.ndjson` в корне репозитория — NDJSON, по одному
-JSON-объекту на строку. Файлы ротируются по дню, хранятся 14 дней.
+Сервис пишет только в консоль: файлы не создаются, каталог `logs/` больше
+не используется.
+
+- **Development** (`ASPNETCORE_ENVIRONMENT=Development`, так запускает
+  `dotnet run`): человекочитаемые строки
+  `[12:34:56 INF] Сообщение`, как раньше.
+- **Production, Staging и остальные окружения**: компактный JSON (NDJSON) —
+  по одному объекту на строку в stdout. Его читает OpenTelemetry Collector
+  из stdout контейнера. stderr остаётся только для аварийных сообщений хоста
+  до инициализации логгера.
+
+Формат выбирается по `ASPNETCORE_ENVIRONMENT`, а не по конфигурации сборки
+(`Debug`/`Release`): в контейнере важен именно `ASPNETCORE_ENVIRONMENT`.
+Принудительно переключить формат можно ключом `Serilog:Console:Json` или
+переменной окружения `Serilog__Console__Json=true`.
+
+Поля событий Serilog: `@t` — время, `@mt` — шаблон сообщения, `@l` — уровень,
+`@x` — исключение, `@tr`/`@sp` — trace/span, остальные свойства события
+(`RequestMethod`, `RequestPath`, `StatusCode`, `Elapsed` и т. п.) лежат
+в корне объекта. Пример приёма логов Docker-контейнера:
+
+```yaml
+receivers:
+  filelog:
+    include: [/var/lib/docker/containers/*/*-json.log]
+    start_at: end
+    operators:
+      - type: json_parser        # обёртка docker json-file: {"log": "...", "stream": "stdout"}
+        parse_from: body
+        parse_to: body
+      - type: move
+        from: body.log
+        to: body
+      - type: json_parser        # событие Serilog
+        parse_from: body
+        parse_to: attributes
+      - type: timestamp
+        parse_from: attributes["@t"]
+        layout_type: gotime
+        layout: 2006-01-02T15:04:05.0000000Z07:00
+```
 
 В журнал попадают HTTP-запросы с методом, путём, статусом и временем,
 обработанные доменные ошибки со стеком исключения, ошибки S3 и фоновых
