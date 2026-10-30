@@ -93,11 +93,13 @@ public static class DependencyInjection
         services.AddSingleton<ITempFileFactory, TemporaryFileFactory>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<IReconciliationService, ReconciliationService>();
+        services.AddScoped<RetentionGcService>();
 
         services.AddHostedService<S3BucketInitializer>();
         services.AddHostedService<ReconciliationBackgroundService>();
         services.AddHostedService<OrphanSweepBackgroundService>();
         services.AddHostedService<MultipartCleanupBackgroundService>();
+        services.AddHostedService<RetentionBackgroundService>();
 
         return services;
     }

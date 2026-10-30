@@ -53,7 +53,10 @@ public sealed class FileMetadataRepository(ReonDbContext dbContext) : IFileMetad
     {
         return await dbContext.Files
             .AsNoTracking()
-            .Where(file => file.Status == FileStatus.Pending || file.Status == FileStatus.Ready)
+            .Where(file =>
+                file.Status == FileStatus.Pending ||
+                file.Status == FileStatus.Ready ||
+                file.Status == FileStatus.Expired)
             .Select(file => file.Id)
             .ToListAsync(cancellationToken);
     }

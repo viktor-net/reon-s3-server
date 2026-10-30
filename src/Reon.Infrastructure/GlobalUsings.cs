@@ -14,6 +14,7 @@ global using Reon.Core.Services;
 global using Reon.Infrastructure.Configuration;
 global using Reon.Infrastructure.Persistence;
 global using Reon.Infrastructure.Reconciliation;
+global using Reon.Infrastructure.Retention;
 global using Reon.Infrastructure.Services;
 global using Reon.Infrastructure.Storage;
 global using System.Text.Json;

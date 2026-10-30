@@ -269,7 +269,7 @@ public sealed class FakeFileMetadataRepository : IFileMetadataRepository
     {
         return Task.FromResult<IReadOnlyCollection<Guid>>(
             _files
-                .Where(file => file.Status is FileStatus.Pending or FileStatus.Ready)
+                .Where(file => file.Status is FileStatus.Pending or FileStatus.Ready or FileStatus.Expired)
                 .Select(file => file.Id)
                 .ToArray());
     }
