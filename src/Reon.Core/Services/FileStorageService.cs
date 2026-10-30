@@ -144,21 +144,26 @@ public sealed partial class FileStorageService
         return await GetExistingFileAsync(fileId, cancellationToken);
     }
 
+    /// <summary>
+    /// Возвращает описание только для доступного файла: просроченный или
+    /// неготовый файл не должен отдавать заголовки содержимого.
+    /// </summary>
+    public async Task<FileMetadata> GetAvailableMetadataAsync(
+        Guid fileId,
+        CancellationToken cancellationToken)
+    {
+        var file = await GetExistingFileAsync(fileId, cancellationToken);
+        EnsureAvailable(file);
+
+        return file;
+    }
+
     public async Task<FileContent> OpenContentAsync(
         Guid fileId,
         CancellationToken cancellationToken)
     {
         var file = await GetExistingFileAsync(fileId, cancellationToken);
-
-        if (file.Status == FileStatus.Expired || file.IsExpired(_clock.UtcNow))
-        {
-            throw new FileExpiredException(file.Id, file.ExpiresAt);
-        }
-
-        if (file.Status != FileStatus.Ready)
-        {
-            throw new FileNotReadyException(file.Id, file.Status);
-        }
+        EnsureAvailable(file);
 
         var stream = await _objectStorage.OpenReadAsync(file.ObjectKey, cancellationToken);
         if (stream is null)
@@ -194,15 +199,7 @@ public sealed partial class FileStorageService
         CancellationToken cancellationToken)
     {
         var file = await GetExistingFileAsync(fileId, cancellationToken);
-        if (file.Status == FileStatus.Expired || file.IsExpired(_clock.UtcNow))
-        {
-            throw new FileExpiredException(file.Id, file.ExpiresAt);
-        }
-
-        if (file.Status != FileStatus.Ready)
-        {
-            throw new FileNotReadyException(file.Id, file.Status);
-        }
+        EnsureAvailable(file);
 
         var normalizedName = originalName is null
             ? file.OriginalName
@@ -228,15 +225,7 @@ public sealed partial class FileStorageService
         CancellationToken cancellationToken)
     {
         var source = await GetExistingFileAsync(sourceFileId, cancellationToken);
-        if (source.Status == FileStatus.Expired || source.IsExpired(_clock.UtcNow))
-        {
-            throw new FileExpiredException(source.Id, source.ExpiresAt);
-        }
-
-        if (source.Status != FileStatus.Ready)
-        {
-            throw new FileNotReadyException(source.Id, source.Status);
-        }
+        EnsureAvailable(source);
 
         var retention = _options.ResolveRetention(command.RetentionSeconds);
 
@@ -361,6 +350,19 @@ public sealed partial class FileStorageService
         }
 
         return file;
+    }
+
+    private void EnsureAvailable(FileMetadata file)
+    {
+        if (file.Status == FileStatus.Expired || file.IsExpired(_clock.UtcNow))
+        {
+            throw new FileExpiredException(file.Id, file.ExpiresAt);
+        }
+
+        if (file.Status != FileStatus.Ready)
+        {
+            throw new FileNotReadyException(file.Id, file.Status);
+        }
     }
 
     private static string GetSafeExtension(string originalName)

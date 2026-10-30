@@ -18,6 +18,12 @@ public sealed class UploadsController(
     IOptions<FileStorageOptions> options,
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
+    /// <summary>Начинает сессию параллельной загрузки файла по частям.</summary>
+    /// <remarks>
+    /// Необязательный retentionSeconds задаёт срок хранения будущего файла.
+    /// Он сохраняется в сессии и применяется при завершении: срок отсчитывается
+    /// от момента появления файла, а не от начала загрузки.
+    /// </remarks>
     [HttpPost]
     [ProducesResponseType<MultipartUploadResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -34,7 +40,8 @@ public sealed class UploadsController(
                 request.ContentType,
                 request.Description,
                 request.Tags,
-                cancellationToken);
+                cancellationToken,
+                request.RetentionSeconds);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -115,6 +122,12 @@ public sealed class UploadsController(
             part.UploadedAt));
     }
 
+    /// <summary>Завершает загрузку и создаёт файл.</summary>
+    /// <remarks>
+    /// Создаёт строку files со статусом Ready, считает SHA-256 и применяет
+    /// срок хранения, сохранённый при начале сессии. В ответе возвращается
+    /// expiresAt — момент, когда файл перестанет отдаваться.
+    /// </remarks>
     [HttpPost("{uploadId:guid}/complete")]
     [ProducesResponseType<FileMetadataResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -229,6 +242,7 @@ public sealed class UploadsController(
                     part.ETag,
                     part.Size,
                     part.UploadedAt))
-                .ToArray());
+                .ToArray(),
+            upload.RetentionSeconds);
     }
 }

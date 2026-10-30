@@ -160,6 +160,82 @@ public sealed class FileStorageServiceTests
         Assert.Empty(_repository.Files);
     }
 
+    [Fact]
+    public async Task UploadAsync_WithRetention_SetsExpiresAt()
+    {
+        var file = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 3600),
+            CancellationToken.None);
+
+        Assert.Equal(Now.AddHours(1), file.ExpiresAt);
+        Assert.False(file.RetentionHold);
+    }
+
+    [Fact]
+    public async Task OpenContentAsync_WhenExpired_ThrowsAndKeepsObject()
+    {
+        var file = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 60),
+            CancellationToken.None);
+
+        _clock.UtcNow = Now.AddMinutes(2);
+
+        await Assert.ThrowsAsync<FileExpiredException>(() =>
+            _service.OpenContentAsync(file.Id, CancellationToken.None));
+
+        Assert.True(_storage.Objects.ContainsKey(file.ObjectKey));
+    }
+
+    [Fact]
+    public async Task OpenContentAsync_WhenExpiredButHeld_ReturnsContent()
+    {
+        var file = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 60),
+            CancellationToken.None);
+
+        file.SetRetentionHold(true, _clock.UtcNow);
+        _clock.UtcNow = Now.AddMinutes(2);
+
+        var content = await _service.OpenContentAsync(file.Id, CancellationToken.None);
+
+        Assert.NotNull(content.Stream);
+        await content.Stream.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task CopyAsync_WhenSourceExpired_Throws()
+    {
+        var source = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 60),
+            CancellationToken.None);
+
+        _clock.UtcNow = Now.AddMinutes(2);
+
+        await Assert.ThrowsAsync<FileExpiredException>(() =>
+            _service.CopyAsync(source.Id, new CopyFileCommand(null, null, null), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CopyAsync_WithRetention_UsesOwnExpiry()
+    {
+        var source = await _service.UploadAsync(
+            new MemoryStream("hello"u8.ToArray()),
+            new UploadFileCommand("hello.txt", "text/plain", null, null, RetentionSeconds: 60),
+            CancellationToken.None);
+
+        var copy = await _service.CopyAsync(
+            source.Id,
+            new CopyFileCommand(null, null, null, RetentionSeconds: 3600),
+            CancellationToken.None);
+
+        Assert.Equal(Now.AddHours(1), copy.ExpiresAt);
+        Assert.Equal(Now.AddMinutes(1), source.ExpiresAt);
+    }
+
     private Task<Reon.Core.Entities.FileMetadata> UploadAsync()
     {
         return _service.UploadAsync(

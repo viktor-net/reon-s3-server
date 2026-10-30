@@ -12,6 +12,12 @@ public sealed class InitiateMultipartUploadRequest
     public string? Description { get; init; }
 
     public Dictionary<string, string>? Tags { get; init; }
+
+    /// <summary>
+    /// Срок хранения будущего файла в секундах. Применяется при завершении
+    /// загрузки, чтобы длительная загрузка не сокращала срок жизни файла.
+    /// </summary>
+    public int? RetentionSeconds { get; init; }
 }
 
 public sealed record MultipartUploadResponse(
@@ -24,7 +30,8 @@ public sealed record MultipartUploadResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? CompletedAt,
-    IReadOnlyList<MultipartPartResponse> Parts);
+    IReadOnlyList<MultipartPartResponse> Parts,
+    int? RetentionSeconds);
 
 public sealed record MultipartPartResponse(
     int PartNumber,

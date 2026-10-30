@@ -28,7 +28,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
           "failureReason": null,
           "createdAt": "2026-10-29T09:00:00+00:00",
           "completedAt": "2026-10-29T09:00:01+00:00",
-          "updatedAt": "2026-10-29T09:00:01+00:00"
+          "updatedAt": "2026-10-29T09:00:01+00:00",
+          "expiresAt": "2026-11-28T09:00:00+00:00",
+          "retentionHold": false
         }
         """;
 
@@ -43,7 +45,8 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
           "createdAt": "2026-10-29T09:00:00+00:00",
           "expiresAt": "2026-11-05T09:00:00+00:00",
           "completedAt": null,
-          "parts": []
+          "parts": [],
+          "retentionSeconds": 604800
         }
         """;
 
@@ -168,7 +171,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Загрузить файл";
         operation.Description =
             "Файл передаётся частью `File`. Необязательное поле `Metadata` — " +
-            "JSON-строка с originalName, contentType, description и tags.";
+            "JSON-строка с originalName, contentType, description, tags и " +
+            "retentionSeconds. retentionSeconds задаёт срок хранения в секундах; " +
+            "если поле не передано, применяется FileStorage:DefaultRetentionDays.";
 
         if (operation.RequestBody is { } requestBody &&
             requestBody.Content is { } requestContent &&
@@ -178,7 +183,7 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
             {
                 ["File"] = "(binary file content)",
                 ["Metadata"] = """
-                    {"originalName":"hello.txt","contentType":"text/plain","description":"пример","tags":{"kind":"demo"}}
+                    {"originalName":"hello.txt","contentType":"text/plain","description":"пример","tags":{"kind":"demo"},"retentionSeconds":2592000}
                     """,
             };
         }
@@ -202,7 +207,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
               "failureReason": null,
               "createdAt": "2026-10-29T09:00:00+00:00",
               "completedAt": "2026-10-29T09:00:01+00:00",
-              "updatedAt": "2026-10-29T09:00:01+00:00"
+              "updatedAt": "2026-10-29T09:00:01+00:00",
+              "expiresAt": "2026-11-28T09:00:00+00:00",
+              "retentionHold": false
             }
             """);
     }
@@ -212,7 +219,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Скачать файл";
         operation.Description =
             "Возвращает содержимое файла бинарным потоком. Для скачивания достаточно " +
-            "идентификатора файла (fileId) из ответа загрузки.";
+            "идентификатора файла (fileId) из ответа загрузки. Если срок хранения " +
+            "истёк, возвращается 410 FILE_EXPIRED, даже когда объект ещё не удалён " +
+            "из S3.";
 
         SetParameterExample(operation, "fileId", FileIdExample);
     }
@@ -222,7 +231,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Получить описание файла";
         operation.Description =
             "Возвращает JSON с описанием файла: именем, типом, размером, " +
-            "статусом, тегами и служебными полями.";
+            "статусом, тегами и служебными полями. Описание доступно и для " +
+            "просроченного файла: status = Expired и expiresAt позволяют UI " +
+            "показать, что срок истёк.";
 
         SetParameterExample(operation, "fileId", FileIdExample);
         SetJsonExample(
@@ -244,7 +255,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
               "failureReason": null,
               "createdAt": "2026-10-29T09:00:00+00:00",
               "completedAt": "2026-10-29T09:00:01+00:00",
-              "updatedAt": "2026-10-29T09:00:01+00:00"
+              "updatedAt": "2026-10-29T09:00:01+00:00",
+              "expiresAt": "2026-11-28T09:00:00+00:00",
+              "retentionHold": false
             }
             """);
     }
@@ -292,7 +305,8 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Заголовки файла";
         operation.Description =
             "Возвращает Content-Type, Content-Length и ETag без тела файла. " +
-            "Если файл не в состоянии Ready, возвращается 409.";
+            "Если файл не в состоянии Ready, возвращается 409; если срок " +
+            "хранения истёк — 410.";
         SetParameterExample(operation, "fileId", FileIdExample);
     }
 
@@ -319,7 +333,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Скопировать файл";
         operation.Description =
-            "Создаёт новый идентификатор файла (fileId) и копирует объект в S3 и описание в PostgreSQL.";
+            "Создаёт новый идентификатор файла (fileId) и копирует объект в S3 и " +
+            "описание в PostgreSQL. Копия получает собственный срок хранения: " +
+            "retentionSeconds в теле или FileStorage:DefaultRetentionDays.";
         SetParameterExample(operation, "fileId", FileIdExample);
         SetJsonRequestBodyExample(
             operation,
@@ -327,7 +343,8 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
             {
               "originalName": "copy.txt",
               "description": "копия",
-              "tags": { "kind": "copy" }
+              "tags": { "kind": "copy" },
+              "retentionSeconds": 2592000
             }
             """);
         SetJsonExample(operation, "201", FileExampleJson);
@@ -370,7 +387,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
         operation.Summary = "Начать параллельную загрузку файла по частям";
         operation.Description =
             "Создаёт сессию загрузки. Идентификатор загрузки S3 остаётся внутри сервиса; " +
-            "клиент использует uploadId, partSize и expiresAt.";
+            "клиент использует uploadId, partSize и expiresAt. Необязательный " +
+            "retentionSeconds задаёт срок хранения будущего файла и применяется " +
+            "при завершении загрузки.";
         SetJsonRequestBodyExample(
             operation,
             """
@@ -378,7 +397,8 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
               "originalName": "big.bin",
               "contentType": "application/octet-stream",
               "description": "большой файл",
-              "tags": { "kind": "backup" }
+              "tags": { "kind": "backup" },
+              "retentionSeconds": 604800
             }
             """);
         SetJsonExample(operation, "201", UploadSessionExampleJson);
@@ -417,7 +437,9 @@ public sealed class OpenApiExamplesOperationTransformer : IOpenApiOperationTrans
     {
         operation.Summary = "Завершить параллельную загрузку файла по частям";
         operation.Description =
-            "Собирает объект в S3, считает SHA-256 и создаёт описание файла в PostgreSQL.";
+            "Собирает объект в S3, считает SHA-256 и создаёт описание файла в " +
+            "PostgreSQL. Срок хранения берётся из сессии и отсчитывается от " +
+            "момента завершения; в ответе возвращается expiresAt.";
         SetParameterExample(operation, "uploadId", FileIdExample);
         SetJsonExample(operation, "201", FileExampleJson);
     }

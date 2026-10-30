@@ -13,6 +13,14 @@ public sealed class FilesController(
     IStorageAuditor auditor,
     IOptions<AdminOptions> adminOptions) : ReonApiControllerBase(auditor, adminOptions)
 {
+    /// <summary>Загружает файл и возвращает его описание.</summary>
+    /// <remarks>
+    /// Срок хранения задаётся необязательным полем retentionSeconds в JSON
+    /// metadata: это относительный срок в секундах, сервер сам вычисляет
+    /// expiresAt. Если поле не передано, применяется
+    /// FileStorage:DefaultRetentionDays (0 — бессрочно). Срок можно продлить
+    /// отдельным запросом, а защитить файл от удаления — флагом retentionHold.
+    /// </remarks>
     [HttpPost]
     [Consumes("multipart/form-data")]
     [Produces("application/json")]
@@ -49,7 +57,8 @@ public sealed class FilesController(
             OriginalName: metadata?.OriginalName ?? request.File.FileName,
             ContentType: metadata?.ContentType ?? request.File.ContentType,
             Description: metadata?.Description,
-            Tags: metadata?.Tags);
+            Tags: metadata?.Tags,
+            RetentionSeconds: metadata?.RetentionSeconds);
 
         await using var stream = request.File.OpenReadStream();
 
@@ -112,17 +121,20 @@ public sealed class FilesController(
             result.PageSize));
     }
 
+    /// <summary>Возвращает заголовки файла без тела.</summary>
+    /// <remarks>
+    /// Для просроченного файла возвращается 410, для неготового — 409.
+    /// Заголовки Content-Type, Content-Length и ETag берутся из описания
+    /// в Postgres.
+    /// </remarks>
     [HttpHead("{fileId:guid}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone, "application/problem+json")]
     public async Task<IActionResult> Head(Guid fileId, CancellationToken cancellationToken)
     {
-        var file = await fileStorage.GetMetadataAsync(fileId, cancellationToken);
-        if (file.Status != FileStatus.Ready)
-        {
-            throw new FileNotReadyException(file.Id, file.Status);
-        }
+        var file = await fileStorage.GetAvailableMetadataAsync(fileId, cancellationToken);
 
         Response.ContentType = file.ContentType;
         Response.ContentLength = file.Size;
@@ -173,6 +185,13 @@ public sealed class FilesController(
         return Ok(FileMetadataResponse.FromEntity(file));
     }
 
+    /// <summary>Создаёт копию файла.</summary>
+    /// <remarks>
+    /// Копия получает собственный fileId и собственный срок хранения.
+    /// retentionSeconds в теле задаёт его явно; если поле не передано,
+    /// применяется FileStorage:DefaultRetentionDays, а не остаток срока
+    /// исходного файла.
+    /// </remarks>
     [HttpPost("{fileId:guid}/copy")]
     [Produces("application/json")]
     [ProducesResponseType<FileMetadataResponse>(StatusCodes.Status201Created)]
@@ -189,7 +208,11 @@ public sealed class FilesController(
         {
             copy = await fileStorage.CopyAsync(
                 fileId,
-                new CopyFileCommand(request.OriginalName, request.Description, request.Tags),
+                new CopyFileCommand(
+                    request.OriginalName,
+                    request.Description,
+                    request.Tags,
+                    request.RetentionSeconds),
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -279,10 +302,17 @@ public sealed class FilesController(
         return Ok(new BulkDeleteResponse(results));
     }
 
+    /// <summary>Скачивает файл бинарным потоком.</summary>
+    /// <remarks>
+    /// Файл отдаётся только в статусе Ready. Если истёк срок хранения,
+    /// возвращается 410 FILE_EXPIRED, даже когда объект ещё не удалён из S3:
+    /// проверка выполняется по expires_at, а не по факту работы сборщика.
+    /// </remarks>
     [HttpGet("{fileId:guid}")]
     [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK, "application/octet-stream")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone, "application/problem+json")]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway, "application/problem+json")]
     public async Task<IActionResult> Download(Guid fileId, CancellationToken cancellationToken)
     {
@@ -305,6 +335,12 @@ public sealed class FilesController(
             enableRangeProcessing: false);
     }
 
+    /// <summary>Возвращает описание файла.</summary>
+    /// <remarks>
+    /// Описание доступно и для просроченного файла: статус Expired и
+    /// expiresAt позволяют UI показать, что срок истёк. Для удалённого файла
+    /// возвращается 404.
+    /// </remarks>
     [HttpGet("{fileId:guid}/metadata")]
     [Produces("application/json")]
     [ProducesResponseType<FileMetadataResponse>(StatusCodes.Status200OK)]

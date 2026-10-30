@@ -68,6 +68,31 @@ public sealed class MultipartUploadServiceTests
     }
 
     [Fact]
+    public async Task CompleteAsync_WithRetention_SetsExpiresAt()
+    {
+        var upload = await _service.InitiateAsync(
+            "kept.txt",
+            "text/plain",
+            null,
+            null,
+            CancellationToken.None,
+            retentionSeconds: 3600);
+
+        Assert.Equal(3600, upload.RetentionSeconds);
+
+        await _service.UploadPartAsync(
+            upload.Id,
+            1,
+            new MemoryStream("hello"u8.ToArray()),
+            contentLength: 5,
+            cancellationToken: CancellationToken.None);
+
+        var file = await _service.CompleteAsync(upload.Id, CancellationToken.None);
+
+        Assert.Equal(Now.AddHours(1), file.ExpiresAt);
+    }
+
+    [Fact]
     public async Task AbortAsync_MarksUploadAbortedAndRemovesS3Upload()
     {
         var upload = await _service.InitiateAsync(

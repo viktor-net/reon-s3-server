@@ -15,7 +15,9 @@ public sealed record FileMetadataResponse(
     string? FailureReason,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt,
+    bool RetentionHold)
 {
     public static FileMetadataResponse FromEntity(FileMetadata file)
     {
@@ -34,7 +36,9 @@ public sealed record FileMetadataResponse(
             file.FailureReason,
             file.CreatedAt,
             file.CompletedAt,
-            file.UpdatedAt);
+            file.UpdatedAt,
+            file.ExpiresAt,
+            file.RetentionHold);
     }
 
     private static Dictionary<string, string>? DeserializeTags(JsonDocument? tags)

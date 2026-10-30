@@ -14,7 +14,8 @@ public sealed record UpdateFileMetadataRequest(
 public sealed record CopyFileRequest(
     string? OriginalName,
     string? Description,
-    Dictionary<string, string>? Tags);
+    Dictionary<string, string>? Tags,
+    int? RetentionSeconds = null);
 
 public sealed record BulkDeleteRequest(
     IReadOnlyList<Guid> FileIds,
