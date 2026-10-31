@@ -11,8 +11,10 @@ artifacts/
 TestResults/
 coverage/
 
-## Local configuration and secrets
-.env
+## Configuration and secrets
+# .env — общий конфиг dev-стенда, коммитится вместе с .env.example: значения
+# годятся только для локального запуска. Личные переопределения держите в
+# .env.local — он игнорируется.
 .env.*
 !.env.example
 appsettings.Local.json

@@ -25,11 +25,15 @@ services:
       timeout: 5s
       retries: 20
 
-  # S3-совместимое хранилище. Образ собирается в reon-s3-dev:
-  #   cd ../reon-s3-dev && docker compose build swift
-  # Здесь только запуск: Dockerfile, конфиги и smoke-тесты Swift остаются там.
+  # S3-совместимое хранилище. Образ собирается локально из docker/swift/:
+  #   docker compose up -d --build
+  # Dockerfile и конфиги Swift — копия из reon-s3-dev, поэтому второй
+  # репозиторий для запуска стенда не нужен. Готовый образ можно подставить
+  # через SWIFT_IMAGE в .env, тогда сборка не выполняется.
   # Наружу опубликован порт 8080, локальный API ходит на localhost:8080.
   swift:
+    build:
+      context: ./docker/swift
     image: ${SWIFT_IMAGE:-swift-s3api-aio:2.33}
     container_name: reon-s3-swift
     hostname: swift

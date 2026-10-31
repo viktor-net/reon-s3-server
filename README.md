@@ -9,7 +9,25 @@
 
 Стенд — это контейнеры Postgres, Swift S3, OpenAPI UI для Swift, Filestash и
 OpenTelemetry Collector. .NET API запускается двумя способами, и в обоих он
-доступен на `localhost:8090`:
+доступен на `localhost:8090`.
+
+### Что нужно
+
+- Docker Engine или Docker Desktop с плагином Compose v2 (`docker compose version`);
+- интернет при первом запуске: скачиваются базовые образы и пакеты для сборки Swift.
+
+Второй репозиторий не нужен: образ Swift S3 собирается локально из
+`docker/swift/` при первом запуске. Настройки стенда лежат в `.env`; если файла
+нет, он создаётся из `.env.example` (значения — только для локального стенда).
+
+Проверить машину до запуска (Docker, `.env`, нужные файлы, занятые порты):
+
+```bash
+pwsh -File scripts/check-stand.ps1   # Windows
+bash scripts/check-stand.sh          # Linux, macOS, Git Bash
+```
+
+Скрипт ничего не меняет, кроме создания `.env`, и печатает команду для запуска.
 
 ### 1. Отладка в Visual Studio:
 
@@ -19,11 +37,12 @@ OpenTelemetry Collector. .NET API запускается двумя способ
 docker compose up -d --build
 ```
 
+Первый запуск собирает образ Swift S3 (5–10 минут), дальше он берётся из кеша.
 Сервис `api` в этом режиме не поднимается: он входит в отдельный профиль.
 
 ### 2. Сборка .NET-проекта в контейнер: API вместе со стендом
 
-Поднимите стенд вместе с API:
+Поднимите стенд вместе с API (нужен заполненный `.env`, см. выше):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.api.yml \
@@ -40,10 +59,12 @@ docker compose -f docker-compose.yml -f docker-compose.api.yml \
 - OpenTelemetry Collector: OTLP gRPC `localhost:4317`, OTLP HTTP
   `localhost:4318`, health `localhost:13133`
 
-Dockerfile и конфиги Swift остаются в `reon-s3-dev`; здесь только запуск
-образа `swift-s3api-aio:2.33` (переопределяется через `SWIFT_IMAGE`).
-Внешних сетей нет. Конфиги Swagger UI и Filestash — в `docker/swagger/`
-и `docker/filestash/`.
+Сборка Swift S3 лежит в `docker/swift/` — это копия из репозитория
+`reon-s3-dev` (образ `swift-s3api-aio:2.33`). Она хранится здесь, чтобы стенд
+поднимался из одного репозитория; при изменении конфигов Swift синхронизируйте
+их с `reon-s3-dev`. Готовый образ можно подставить через `SWIFT_IMAGE` в `.env`
+и запускать без `--build`. Внешних сетей нет. Конфиги Swagger UI и Filestash —
+в `docker/swagger/` и `docker/filestash/`.
 
 ### OpenTelemetry Collector
 
@@ -353,10 +374,19 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 ├── docker/
 │   ├── filestash/config.json              # seed-конфиг Filestash
 │   ├── otel-collector/config.yaml         # приём OTLP и экспорт телеметрии
-│   └── swagger/                           # Swagger UI для S3/Swift API
-│       ├── nginx.conf                     # прокси /api → swift:8080
-│       ├── openapi.yaml                   # контракт S3/Swift (копия из reon-s3-dev)
-│       └── swagger-signer.js              # подпись S3-запросов в браузере
+│   ├── swagger/                           # Swagger UI для S3/Swift API
+│   │   ├── nginx.conf                     # прокси /api → swift:8080
+│   │   ├── openapi.yaml                   # контракт S3/Swift (копия из reon-s3-dev)
+│   │   └── swagger-signer.js              # подпись S3-запросов в браузере
+│   └── swift/                             # сборка Swift S3 (копия из reon-s3-dev)
+│       ├── Dockerfile                     # образ swift-s3api-aio:2.33
+│       ├── entrypoint.sh                  # rings, memcached, запуск демонов Swift
+│       ├── etc/                           # конфиги Swift и rsyslog
+│       └── smoky_tests/                   # smoke-тесты S3 внутри образа
+├── scripts/
+│   ├── check-stand.sh                     # проверка машины перед запуском стенда
+│   ├── check-stand.ps1
+│   └── seed/                              # демо-данные стенда
 ├── README.md                              # описание сервиса, API и архитектуры
 ├── CONTRIBUTIONS.md                       # правила коммитов
 ├── .config/
@@ -1133,12 +1163,14 @@ OTLP-endpoint.
 
 | Симптом | Что проверить |
 |---|---|
+| Стенд не поднимается на новой машине | `bash scripts/check-stand.sh` или `pwsh -File scripts/check-stand.ps1`: Docker, `.env`, файлы, порты |
 | `Could not ensure S3 bucket` | Запущен ли `swift-s3api`, верны ли `S3:ServiceUrl` и креды |
 | `502` | Доступность S3, path-style, регион |
 | Scalar UI пустой | Открывайте `localhost:8090/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
 | API в контейнере не видит Postgres/Swift | Внутри compose используйте `postgres:5432` и `swift:8080`, а не `localhost`; проверьте `.env` и `docker compose ps` |
 | `Задайте POSTGRES_PASSWORD в .env` | Скопируйте `.env.example` в `.env` и заполните секреты |
+| `pull access denied for swift-s3api-aio` | В compose не хватает `build:` у сервиса `swift` или он запущен без `--build` на машине без образа. Образ собирается из `docker/swift/`: `docker compose build swift`, затем `docker compose up -d`. Если задан `SWIFT_IMAGE`, проверьте, что такой образ существует |
 | `filelog: permission denied` | Коллектор должен работать с `user: "0:0"` и монтировать `/var/lib/docker/containers` |
 | Спаны не приходят в коллектор | Проверьте `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose — `otel-collector:4317`), health коллектора `localhost:13133` и `docker logs reon-s3-otel-collector` |
 | Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |

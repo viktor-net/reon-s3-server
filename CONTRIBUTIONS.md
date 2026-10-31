@@ -63,7 +63,7 @@
 | `core` | `src/Reon.Core` — домен, интерфейсы, сценарии |
 | `infra` | `src/Reon.Infrastructure` — EF Core, S3, background workers |
 | `db` | Миграции и схема Postgres |
-| `docker` | `Dockerfile`, `docker-compose.yml` |
+| `docker` | `Dockerfile`, `docker-compose*.yml`, `docker/` |
 | `tests` | `tests/**` |
 | `docs` | `README.md`, `CONTRIBUTIONS.md` |
 | `config` | `appsettings*.json`, `global.json`, `.editorconfig` |

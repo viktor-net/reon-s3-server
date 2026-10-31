@@ -5,3 +5,7 @@
 Dockerfile text eol=lf
 .dockerignore text eol=lf
 *.sh text eol=lf
+# Конфиги Swift S3 (docker/swift/) читаются демонами внутри Linux-контейнера:
+# CRLF в .conf ломает rsyslog и парсеры Swift.
+*.conf text eol=lf
+*.py text eol=lf
