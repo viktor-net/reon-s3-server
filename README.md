@@ -45,8 +45,7 @@ docker compose up -d --build
 Поднимите стенд вместе с API (нужен заполненный `.env`, см. выше):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.api.yml \
-  --profile api up -d --build
+docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up -d --build
 ```
 
 ### Адреса стенда
