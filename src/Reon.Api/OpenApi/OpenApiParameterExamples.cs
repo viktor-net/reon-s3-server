@@ -12,7 +12,7 @@ internal static class OpenApiParameterExamples
 {
     private static readonly Dictionary<string, string> Examples = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["bucket"] = "cat-demo",
+        ["bucket"] = "registry-cases",
         ["key"] = "README.md",
         ["page"] = "1",
         ["pageSize"] = "50",
@@ -25,7 +25,7 @@ internal static class OpenApiParameterExamples
         ["status"] = "Ready",
         ["actor"] = "admin",
         ["action"] = "object.upload",
-        ["resource"] = "cat-demo/README.md",
+        ["resource"] = "registry-cases/README.md",
         ["result"] = "Success",
     };
 
