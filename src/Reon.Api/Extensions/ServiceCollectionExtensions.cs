@@ -12,15 +12,13 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">Коллекция сервисов приложения.</param>
     /// <param name="configuration">Конфигурация приложения.</param>
-    /// <param name="environment">Окружение хостинга.</param>
     /// <returns>Та же коллекция сервисов для цепочки вызовов.</returns>
     public static IServiceCollection AddReonApi(
         this IServiceCollection services,
-        IConfiguration configuration,
-        IHostEnvironment environment)
+        IConfiguration configuration)
     {
         services.AddControllers();
-        services.AddReonApiCors(environment);
+        services.AddReonApiCors();
         services.AddReonApiProblemDetails();
         services.AddReonApiOpenApi();
         services.AddInfrastructure(configuration);
@@ -32,23 +30,16 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddReonApiCors(
-        this IServiceCollection services,
-        IHostEnvironment environment)
+    private static IServiceCollection AddReonApiCors(this IServiceCollection services)
     {
-        if (environment.IsDevelopment())
+        services.AddCors(options =>
         {
-            services.AddCors(options =>
-            {
-                options.AddDefaultPolicy(policy =>
-                    policy
-                        .SetIsOriginAllowed(origin =>
-                            origin == "null" ||
-                            (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback))
-                        .AllowAnyHeader()
-                        .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "QUERY"));
-            });
-        }
+            options.AddDefaultPolicy(policy =>
+                policy
+                    .AllowAnyOrigin()
+                    .AllowAnyHeader()
+                    .AllowAnyMethod());
+        });
 
         return services;
     }

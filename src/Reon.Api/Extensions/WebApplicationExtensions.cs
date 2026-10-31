@@ -54,11 +54,7 @@ public static class WebApplicationExtensions
     {
         app.UseReonApiRequestLogging();
         app.UseExceptionHandler();
-
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseCors();
-        }
+        app.UseCors();
 
         app.UseWebSockets();
         app.UseStatusCodePages(async context =>
