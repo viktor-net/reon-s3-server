@@ -1,0 +1,10 @@
+{
+  "at": "<ISO-8601>",
+  "event": "claim | heartbeat | result | release | close | model-fallback | blocked",
+  "task": "<task-id>",
+  "session": "ses_...",
+  "model": "opencode-go/...",
+  "agent": "<role>",
+  "attempt": 1,
+  "payload": {}
+}

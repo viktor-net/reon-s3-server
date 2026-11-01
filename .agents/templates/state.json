@@ -1,0 +1,12 @@
+{
+  "taskId": "<task-id>",
+  "status": "ready",
+  "ownerSession": null,
+  "ownerModel": null,
+  "branch": null,
+  "worktree": null,
+  "files": [],
+  "leaseUntil": null,
+  "heartbeatAt": null,
+  "attempt": 0
+}
