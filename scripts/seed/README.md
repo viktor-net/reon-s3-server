@@ -215,12 +215,12 @@ SEED_COMPOSE_DIR=/path/to/stand bash scripts/seed/seed.sh
 ## Проверка
 
 ```bash
-curl 'http://localhost:8090/api/files?pageSize=5'
-curl 'http://localhost:8090/api/admin/overview'
-curl 'http://localhost:8090/api/admin/audit?pageSize=5'
+curl 'http://localhost:10007/api/files?pageSize=5'
+curl 'http://localhost:10007/api/admin/overview'
+curl 'http://localhost:10007/api/admin/audit?pageSize=5'
 
 # скачать любой Ready-файл по fileId из списка
-curl -OJ 'http://localhost:8090/api/files/{fileId}'
+curl -OJ 'http://localhost:10007/api/files/{fileId}'
 ```
 
 Ожидаемо: 16 файлов `Ready` и по одному в остальных статусах,

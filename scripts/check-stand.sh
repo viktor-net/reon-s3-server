@@ -110,8 +110,8 @@ else
     }
 
     busy=()
-    for entry in 5433:Postgres 8080:'Swift S3' 8081:'Swagger UI' 8082:Filestash \
-                 8090:API 4317:'OTLP gRPC' 4318:'OTLP HTTP' 13133:'OTel health'; do
+    for entry in 10000:Postgres 10001:'Swift S3' 10002:'Swagger UI' 10003:Filestash \
+                 10004:'OTLP gRPC' 10005:'OTLP HTTP' 10006:'OTel health' 10007:API; do
         port="${entry%%:*}"
         name="${entry#*:}"
         port_busy "$port" && busy+=("$port ($name)")

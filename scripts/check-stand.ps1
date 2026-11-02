@@ -121,14 +121,14 @@ if ($standRunning) {
     Warn 'проверка портов пропущена: Docker недоступен'
 } else {
     $ports = @(
-        @{ Port = 5433; Name = 'Postgres' },
-        @{ Port = 8080; Name = 'Swift S3' },
-        @{ Port = 8081; Name = 'Swagger UI' },
-        @{ Port = 8082; Name = 'Filestash' },
-        @{ Port = 8090; Name = 'API' },
-        @{ Port = 4317; Name = 'OTLP gRPC' },
-        @{ Port = 4318; Name = 'OTLP HTTP' },
-        @{ Port = 13133; Name = 'OTel health' }
+        @{ Port = 10000; Name = 'Postgres' },
+        @{ Port = 10001; Name = 'Swift S3' },
+        @{ Port = 10002; Name = 'Swagger UI' },
+        @{ Port = 10003; Name = 'Filestash' },
+        @{ Port = 10004; Name = 'OTLP gRPC' },
+        @{ Port = 10005; Name = 'OTLP HTTP' },
+        @{ Port = 10006; Name = 'OTel health' },
+        @{ Port = 10007; Name = 'API' }
     )
     $busy = @()
     foreach ($entry in $ports) {

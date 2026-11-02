@@ -4,8 +4,8 @@ public sealed class S3Options
 {
     public const string SectionName = "S3";
 
-    /// <summary>Базовый URL S3-совместимого эндпоинта, например http://localhost:8080.</summary>
-    public string ServiceUrl { get; set; } = "http://localhost:8080";
+    /// <summary>Базовый URL S3-совместимого эндпоинта, например http://localhost:10001.</summary>
+    public string ServiceUrl { get; set; } = "http://localhost:10001";
 
     public string AccessKey { get; set; } = string.Empty;
 

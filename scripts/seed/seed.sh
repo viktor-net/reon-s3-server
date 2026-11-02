@@ -202,8 +202,8 @@ fi
 
 echo
 echo "Готово. Проверка:"
-echo "  curl 'http://localhost:8090/api/files?pageSize=5'"
-echo "  curl 'http://localhost:8090/api/admin/overview'"
-echo "  http://localhost:8090/scalar/api"
+echo "  curl 'http://localhost:10007/api/files?pageSize=5'"
+echo "  curl 'http://localhost:10007/api/admin/overview'"
+echo "  http://localhost:10007/scalar/api"
 echo
 echo "Удалить демо-данные: bash scripts/seed/clean.sh"

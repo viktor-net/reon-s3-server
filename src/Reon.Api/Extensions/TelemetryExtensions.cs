@@ -19,7 +19,7 @@ public static class TelemetryExtensions
     public const string ObservabilityProfile = "REON-OBS-1.0";
 
     private const string OtlpEndpointSetting = "Observability:OtlpEndpoint";
-    private const string DefaultOtlpEndpoint = "http://localhost:4317";
+    private const string DefaultOtlpEndpoint = "http://localhost:10004";
 
     /// <summary>
     /// Регистрирует OpenTelemetry SDK и экспортёр OTLP/gRPC.
@@ -31,7 +31,7 @@ public static class TelemetryExtensions
     /// <remarks>
     /// Адрес коллектора берётся из <c>Observability:OtlpEndpoint</c> или
     /// стандартной переменной <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>; по умолчанию
-    /// используется <c>http://localhost:4317</c> для локального запуска.
+    /// используется <c>http://localhost:10004</c> для локального запуска.
     /// </remarks>
     public static IServiceCollection AddReonTelemetry(
         this IServiceCollection services,

@@ -55,7 +55,7 @@ docker compose exec swift python3 -m unittest discover \
 С хост-машины, если установлены Python и `boto3`:
 
 ```bash
-export S3_ENDPOINT='http://localhost:8080'
+export S3_ENDPOINT='http://localhost:10001'
 python -m unittest discover -s smoky_tests -t smoky_tests -v
 ```
 
@@ -69,7 +69,7 @@ python smoky_tests/run.py
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `S3_ENDPOINT` | `http://127.0.0.1:8080` | адрес S3 API |
+| `S3_ENDPOINT` | `http://127.0.0.1:8080` | адрес S3 API (по умолчанию — изнутри контейнера; с хоста — `http://localhost:10001`) |
 | `S3_ACCESS_KEY` | `test:tester` | access key |
 | `S3_SECRET_KEY` | `testing` | secret key |
 | `S3_REGION` | `us-east-1` | регион |
@@ -126,14 +126,14 @@ docker compose exec -e S3_ENDPOINT='http://127.0.0.1:8080' swift smoke-tests
 
 ```bash
 docker compose ps
-curl -i http://localhost:8080/healthcheck
+curl -i http://localhost:10001/healthcheck
 docker compose logs --tail=200 swift
 ```
 
 Типичные причины:
 
 - контейнер ещё не перешёл в `healthy`;
-- занят или изменён порт `8080`;
+- занят или изменён опубликованный порт `10001`;
 - изменены ключи в `etc/swift/proxy-server.conf`, а переменные окружения
   остались старыми;
 - сломана конфигурация pipeline или rings;

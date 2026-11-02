@@ -250,8 +250,8 @@ if ($Scope -in @('all', 'admin')) {
 
 Write-Host ''
 Write-Host 'Готово. Проверка:'
-Write-Host "  curl 'http://localhost:8090/api/files?pageSize=5'"
-Write-Host "  curl 'http://localhost:8090/api/admin/overview'"
-Write-Host '  http://localhost:8090/scalar/api'
+Write-Host "  curl 'http://localhost:10007/api/files?pageSize=5'"
+Write-Host "  curl 'http://localhost:10007/api/admin/overview'"
+Write-Host '  http://localhost:10007/scalar/api'
 Write-Host ''
 Write-Host 'Удалить демо-данные: pwsh -File scripts/seed/clean.ps1'

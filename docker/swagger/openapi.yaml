@@ -1,14 +1,14 @@
 openapi: 3.0.3
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:10001
     description: OpenStack Swift
 
 x-runtime:
   image: swift-s3api-aio:2.33
   base_image: ubuntu:24.04
   swift_version: 2.33.0
-  published_port: 8080
+  published_port: 10001
   internal_ports:
     proxy: 8080
     object: 6000
@@ -1830,7 +1830,7 @@ components:
         type: string
     XStorageUrl:
       description: |
-        Адрес аккаунта, например `http://localhost:8080/v1/AUTH_test`.
+        Адрес аккаунта, например `http://localhost:10001/v1/AUTH_test`.
         В Swagger UI используйте путь `/api/v1/AUTH_test`.
       schema:
         type: string

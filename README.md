@@ -9,7 +9,7 @@
 
 Стенд — это контейнеры Postgres, Swift S3, OpenAPI UI для Swift, Filestash и
 OpenTelemetry Collector. .NET API запускается двумя способами, и в обоих он
-доступен на `localhost:8090`.
+доступен на `localhost:10007`.
 
 ### Что нужно
 
@@ -50,13 +50,13 @@ docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up 
 
 ### Адреса стенда
 
-- API: localhost:8090, Scalar UI —localhost:8090/scalar/api
-- S3: localhost:8080
-- Swagger UI для S3/Swift API: localhost:8081
-- Filestash: localhost:8082 (админка `/admin`, `admin` / `admin`)
-- Postgres: localhost:5433, БД `reon`, пользователь `reon`
-- OpenTelemetry Collector: OTLP gRPC `localhost:4317`, OTLP HTTP
-  `localhost:4318`, health `localhost:13133`
+- API: localhost:10007, Scalar UI —localhost:10007/scalar/api
+- S3: localhost:10001
+- Swagger UI для S3/Swift API: localhost:10002
+- Filestash: localhost:10003 (админка `/admin`, `admin` / `admin`)
+- Postgres: localhost:10000, БД `reon`, пользователь `reon`
+- OpenTelemetry Collector: OTLP gRPC `localhost:10004`, OTLP HTTP
+  `localhost:10005`, health `localhost:10006`
 
 Сборка Swift S3 лежит в `docker/swift/` — это копия из репозитория
 `reon-s3-dev` (образ `swift-s3api-aio:2.33`). Она хранится здесь, чтобы стенд
@@ -70,9 +70,9 @@ docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up 
 `docker compose up -d` поднимает `otel-collector` вместе с остальной
 инфраструктурой. Он принимает телеметрию по OTLP:
 
-- gRPC: `localhost:4317`, из контейнеров — `otel-collector:4317`;
-- HTTP: `localhost:4318`;
-- health: `localhost:13133`.
+- gRPC: `localhost:10004`, из контейнеров — `otel-collector:4317`;
+- HTTP: `localhost:10005`;
+- health: `localhost:10006`.
 
 Конфигурация — `docker/otel-collector/config.yaml`. Сейчас включён экспортёр
 `debug`: принятые данные печатаются в лог коллектора, поэтому его удобно
@@ -83,7 +83,7 @@ docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up 
 Проверка приёма по OTLP HTTP:
 
 ```bash
-curl -X POST http://localhost:4318/v1/logs \
+curl -X POST http://localhost:10005/v1/logs \
   -H "Content-Type: application/json" \
   -d '{"resourceLogs":[{"scopeLogs":[{"logRecords":[{"body":{"stringValue":"ping"}}]}]}]}'
 docker logs reon-s3-otel-collector --tail 5
@@ -569,7 +569,7 @@ Swift s3api не поддерживает весь S3-функционал, а L
 
 ## API
 
-Базовый URL в dev: `localhost:8090`.
+Базовый URL в dev: `localhost:10007`.
 
 ### Доступ
 
@@ -581,7 +581,7 @@ Swift s3api не поддерживает весь S3-функционал, а L
 ### Загрузка
 
 ```bash
-curl -X POST http://localhost:8090/api/files \
+curl -X POST http://localhost:10007/api/files \
   -F "file=@hello.txt" \
   -F 'metadata={"originalName":"hello.txt","contentType":"text/plain","description":"greeting","tags":{"kind":"demo"},"retentionSeconds":2592000}'
 ```
@@ -625,7 +625,7 @@ curl -X POST http://localhost:8090/api/files \
 ### Получение файла
 
 ```bash
-curl -OJ http://localhost:8090/api/files/{fileId}
+curl -OJ http://localhost:10007/api/files/{fileId}
 ```
 
 Ответ: бинарный поток с `Content-Type`, `Content-Disposition`, `Content-Length`
@@ -641,7 +641,7 @@ curl -OJ http://localhost:8090/api/files/{fileId}
 ### Получение метаданных
 
 ```bash
-curl http://localhost:8090/api/files/{fileId}/metadata
+curl http://localhost:10007/api/files/{fileId}/metadata
 ```
 
 Метаданные доступны для статусов `Pending`, `Ready`, `Expired`, `Deleting`,
@@ -652,7 +652,7 @@ curl http://localhost:8090/api/files/{fileId}/metadata
 ### Удаление
 
 ```bash
-curl -X DELETE http://localhost:8090/api/files/{fileId}
+curl -X DELETE http://localhost:10007/api/files/{fileId}
 ```
 
 - `204 No Content` — объект удалён, строка переведена в `Deleted`.
@@ -668,7 +668,7 @@ worker. `0` — хранить бессрочно.
 ### Список файлов
 
 ```bash
-curl 'http://localhost:8090/api/files?page=1&pageSize=50&status=Ready&sort=-createdAt'
+curl 'http://localhost:10007/api/files?page=1&pageSize=50&status=Ready&sort=-createdAt'
 ```
 
 Фильтры:
@@ -694,7 +694,7 @@ curl 'http://localhost:8090/api/files?page=1&pageSize=50&status=Ready&sort=-crea
 ### HEAD
 
 ```bash
-curl -I http://localhost:8090/api/files/{fileId}
+curl -I http://localhost:10007/api/files/{fileId}
 ```
 
 Возвращает `Content-Type`, `Content-Length`, `ETag` без тела. Если файл не
@@ -703,7 +703,7 @@ curl -I http://localhost:8090/api/files/{fileId}
 ### Изменение описания
 
 ```bash
-curl -X PATCH http://localhost:8090/api/files/{fileId}/metadata \
+curl -X PATCH http://localhost:10007/api/files/{fileId}/metadata \
   -H 'Content-Type: application/json' \
   -d '{"originalName":"new.png","description":"новое описание","tags":{"kind":"avatar"}}'
 ```
@@ -716,7 +716,7 @@ curl -X PATCH http://localhost:8090/api/files/{fileId}/metadata \
 ### Изменение срока хранения
 
 ```bash
-curl -X PATCH http://localhost:8090/api/files/{fileId}/retention \
+curl -X PATCH http://localhost:10007/api/files/{fileId}/retention \
   -H 'Content-Type: application/json' \
   -d '{"retentionSeconds":2592000,"retentionHold":false}'
 ```
@@ -730,7 +730,7 @@ curl -X PATCH http://localhost:8090/api/files/{fileId}/retention \
 ### Копирование
 
 ```bash
-curl -X POST http://localhost:8090/api/files/{fileId}/copy \
+curl -X POST http://localhost:10007/api/files/{fileId}/copy \
   -H 'Content-Type: application/json' \
   -d '{"originalName":"copy.png","description":"копия","retentionSeconds":2592000}'
 ```
@@ -743,7 +743,7 @@ curl -X POST http://localhost:8090/api/files/{fileId}/copy \
 ### Массовое удаление
 
 ```bash
-curl -X POST http://localhost:8090/api/files/bulk-delete \
+curl -X POST http://localhost:10007/api/files/bulk-delete \
   -H 'Content-Type: application/json' \
   -d '{"fileIds":["..."],"continueOnError":true}'
 ```
@@ -759,7 +759,7 @@ S3-авторизация остаются внутри сервиса; клие
 1. Начать загрузку:
 
 ```bash
-curl -X POST http://localhost:8090/api/uploads \
+curl -X POST http://localhost:10007/api/uploads \
   -H 'Content-Type: application/json' \
   -d '{"originalName":"big.bin","contentType":"application/octet-stream","description":"большой файл","retentionSeconds":604800}'
 ```
@@ -787,7 +787,7 @@ curl -X POST http://localhost:8090/api/uploads \
 2. Загрузить часть:
 
 ```bash
-curl -X PUT http://localhost:8090/api/uploads/{uploadId}/parts/1 \
+curl -X PUT http://localhost:10007/api/uploads/{uploadId}/parts/1 \
   -H 'Content-Type: application/octet-stream' \
   --data-binary @part1.bin
 ```
@@ -799,13 +799,13 @@ curl -X PUT http://localhost:8090/api/uploads/{uploadId}/parts/1 \
 3. Посмотреть статус и части:
 
 ```bash
-curl http://localhost:8090/api/uploads/{uploadId}
+curl http://localhost:10007/api/uploads/{uploadId}
 ```
 
 4. Завершить:
 
 ```bash
-curl -X POST http://localhost:8090/api/uploads/{uploadId}/complete
+curl -X POST http://localhost:10007/api/uploads/{uploadId}/complete
 ```
 
 Ответ `201 Created` с обычными метаданными файла. Сервис проверяет размер,
@@ -815,13 +815,13 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/complete
 5. Прервать загрузку:
 
 ```bash
-curl -X DELETE http://localhost:8090/api/uploads/{uploadId}
+curl -X DELETE http://localhost:10007/api/uploads/{uploadId}
 ```
 
 или:
 
 ```bash
-curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
+curl -X POST http://localhost:10007/api/uploads/{uploadId}/abort
 ```
 
 Оба варианта вызывают `AbortMultipartUpload` в S3. Повторный abort уже
@@ -867,7 +867,7 @@ curl -X POST http://localhost:8090/api/uploads/{uploadId}/abort
 |---|---|---|
 | `ConnectionStrings:Postgres` | — | Строка подключения к Postgres |
 | `Database:AutoMigrate` | `false` | Применять миграции при старте |
-| `S3:ServiceUrl` | `localhost:8080` | S3 endpoint |
+| `S3:ServiceUrl` | `localhost:10001` | S3 endpoint |
 | `S3:AccessKey` | — | Access key |
 | `S3:SecretKey` | — | Secret key |
 | `S3:Region` | `us-east-1` | Регион |
@@ -1134,7 +1134,7 @@ OpenTelemetry Collector из `docker-compose.yml` собирает stdout кон
 API отправляет спаны напрямую в коллектор по OTLP/gRPC на порт `4317`.
 Адрес задаётся переменной `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose —
 `otel-collector:4317`), локально по умолчанию —
-`localhost:4317`.
+`localhost:10004`.
 
 Что попадает в спаны:
 
@@ -1165,13 +1165,13 @@ OTLP-endpoint.
 | Стенд не поднимается на новой машине | `bash scripts/check-stand.sh` или `pwsh -File scripts/check-stand.ps1`: Docker, `.env`, файлы, порты |
 | `Could not ensure S3 bucket` | Запущен ли `swift-s3api`, верны ли `S3:ServiceUrl` и креды |
 | `502` | Доступность S3, path-style, регион |
-| Scalar UI пустой | Открывайте `localhost:8090/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
+| Scalar UI пустой | Открывайте `localhost:10007/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
 | API в контейнере не видит Postgres/Swift | Внутри compose используйте `postgres:5432` и `swift:8080`, а не `localhost`; проверьте `.env` и `docker compose ps` |
 | `Задайте POSTGRES_PASSWORD в .env` | Скопируйте `.env.example` в `.env` и заполните секреты |
 | `pull access denied for swift-s3api-aio` | В compose не хватает `build:` у сервиса `swift` или он запущен без `--build` на машине без образа. Образ собирается из `docker/swift/`: `docker compose build swift`, затем `docker compose up -d`. Если задан `SWIFT_IMAGE`, проверьте, что такой образ существует |
 | `filelog: permission denied` | Коллектор должен работать с `user: "0:0"` и монтировать `/var/lib/docker/containers` |
-| Спаны не приходят в коллектор | Проверьте `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose — `otel-collector:4317`), health коллектора `localhost:13133` и `docker logs reon-s3-otel-collector` |
-| Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:5433`; поменяйте порт и строку подключения при необходимости |
+| Спаны не приходят в коллектор | Проверьте `OTEL_EXPORTER_OTLP_ENDPOINT` (в compose — `otel-collector:4317`), health коллектора `localhost:10006` и `docker logs reon-s3-otel-collector` |
+| Порт 5432 занят локальным Postgres | Compose публикует Postgres на `localhost:10000`; поменяйте порт и строку подключения при необходимости |
 | Миграции не применились | `Database:AutoMigrate` или `dotnet ef database update` |
 | Файл `Missing` | Объект удалён из S3; проверьте бэкап/versioning |

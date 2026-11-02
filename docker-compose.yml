@@ -16,7 +16,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-reon}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reon_dev_password}
     ports:
-      - "5433:5432"
+      - "10000:5432"
     volumes:
       - reon-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -30,7 +30,7 @@ services:
   # Dockerfile и конфиги Swift — копия из reon-s3-dev, поэтому второй
   # репозиторий для запуска стенда не нужен. Готовый образ можно подставить
   # через SWIFT_IMAGE в .env, тогда сборка не выполняется.
-  # Наружу опубликован порт 8080, локальный API ходит на localhost:8080.
+  # Наружу опубликован порт 10001, локальный API ходит на localhost:10001.
   swift:
     build:
       context: ./docker/swift
@@ -40,7 +40,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "10001:8080"
     volumes:
       - swift-data:/srv/node
     stop_grace_period: 30s
@@ -51,7 +51,7 @@ services:
       retries: 12
       start_period: 30s
 
-  # Swagger UI для S3/Swift API: http://localhost:8081.
+  # Swagger UI для S3/Swift API: http://localhost:10002.
   # Nginx, подпись запросов и openapi.yaml лежат в docker/swagger/.
   docs:
     image: swaggerapi/swagger-ui:v5.17.14
@@ -61,7 +61,7 @@ services:
       swift:
         condition: service_healthy
     ports:
-      - "8081:8080"
+      - "10002:8080"
     environment:
       SWAGGER_JSON: /spec/openapi.yaml
       DOC_EXPANSION: list
@@ -74,7 +74,7 @@ services:
       - ./docker/swagger/nginx.conf:/etc/nginx/templates/default.conf.template:ro
       - ./docker/swagger/swagger-signer.js:/spec/swagger-signer.js:ro
 
-  # Веб-менеджер файлов поверх S3: http://localhost:8082 (admin / admin).
+  # Веб-менеджер файлов поверх S3: http://localhost:10003 (admin / admin).
   # Seed-конфиг копируется в volume filestash-state при первом старте,
   # дальше изменения из /admin живут в этом volume.
   filestash-init:
@@ -106,7 +106,7 @@ services:
       swift:
         condition: service_healthy
     ports:
-      - "8082:8334"
+      - "10003:8334"
     environment:
       # В dev middleware-параметры (включая ключи S3) хранятся открыто.
       CONFIG_ENCRYPT: "false"
@@ -114,8 +114,8 @@ services:
       - filestash-state:/app/data/state
 
   # OpenTelemetry Collector: общая точка приёма телеметрии.
-  # OTLP gRPC — localhost:4317, OTLP HTTP — localhost:4318,
-  # health_check — http://localhost:13133.
+  # OTLP gRPC — localhost:10004, OTLP HTTP — localhost:10005,
+  # health_check — http://localhost:10006.
   # Экспортёр сейчас debug (вывод в лог), реальный backend добавляется
   # в docker/otel-collector/config.yaml.
   otel-collector:
@@ -126,9 +126,9 @@ services:
     user: "0:0"
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "13133:13133"
+      - "10004:4317"
+      - "10005:4318"
+      - "10006:13133"
     volumes:
       - ./docker/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
       # json-file логи контейнеров Docker (на Docker Desktop — внутри VM демона).

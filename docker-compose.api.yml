@@ -25,8 +25,8 @@ services:
     container_name: reon-s3-api
     restart: unless-stopped
     ports:
-      # Снаружи сохраняем привычный адрес API из README и launchSettings.
-      - "8090:8080"
+      # Снаружи — тот же адрес API, что и при локальном запуске (launchSettings).
+      - "10007:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: ${API_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:8080
