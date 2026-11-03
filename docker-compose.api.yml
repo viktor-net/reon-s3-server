@@ -45,6 +45,13 @@ services:
       S3__Region: ${S3_REGION:-us-east-1}
       S3__BucketName: ${S3_BUCKET_NAME:-reon-files}
       S3__ForcePathStyle: "true"
+      # Swift s3api не поддерживает lifecycle, теги, bucket policy и
+      # S3 Object Lock. Флаги заполняют реестр возможностей в Postgres.
+      S3__Capabilities__Versioning: "true"
+      S3__Capabilities__ObjectTags: "false"
+      S3__Capabilities__Lifecycle: "false"
+      S3__Capabilities__BucketPolicy: "false"
+      S3__Capabilities__ObjectLock: "false"
       # Публичный адрес API для временных ссылок на скачивание.
       # Ссылки подписываются на этот адрес и ведут только на API,
       # а не на S3. Менять host по заголовку Host запроса нельзя.
