@@ -1077,6 +1077,8 @@ multipart_upload_parts
 Таблицы и колонки описаны DDL-комментариями (`COMMENT ON TABLE/COLUMN`); они
 применяются миграцией `AddDatabaseComments` и видны в `psql` и клиентах БД.
 Подробная модель взаимодействия Postgres и S3 — в `docs/database-and-s3.md`.
+Реестр возможностей S3-провайдера и сервисная защита от удаления (Object Lock) —
+в `docs/object-storage-capabilities-and-lock.md`.
 
 Административные таблицы:
 
@@ -1085,7 +1087,16 @@ bucket_settings
   bucket varchar(255) pk
   quota_bytes bigint null
   access_mode varchar(32)   -- Private | PublicRead
+  object_lock_enabled boolean -- защита от удаления включена
+  object_lock_mode varchar(16) -- None | Provider | Service
   created_at, updated_at timestamptz
+
+storage_capabilities
+  name varchar(64) pk       -- versioning | object-tags | lifecycle | bucket-policy | object-lock
+  supported boolean
+  source varchar(16)        -- config | learned | default
+  details text null
+  updated_at timestamptz
 
 audit_events
   id uuid pk
