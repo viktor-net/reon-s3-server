@@ -105,6 +105,49 @@ public sealed class AdminBucketsController(
         return Ok(result.ToResponse());
     }
 
+    /// <summary>Версионирование бакета</summary>
+    /// <remarks>Текущее состояние версионирования: включено, приостановлено
+    /// или выключено (провайдер не поддерживает версионирование).</remarks>
+    [HttpGet("{bucket}/versioning")]
+    [ProducesResponseType<BucketVersioningResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    public async Task<ActionResult<BucketVersioningResponse>> GetVersioning(
+        string bucket,
+        CancellationToken cancellationToken)
+    {
+        var versioning = await admin.GetBucketVersioningAsync(bucket, cancellationToken);
+        return Ok(new BucketVersioningResponse(versioning.Enabled, versioning.Suspended));
+    }
+
+    /// <summary>Включить или приостановить версионирование</summary>
+    /// <remarks>Enabled=true создаёт версию при каждой записи объекта. Enabled=false
+    /// приостанавливает создание новых версий: уже созданные версии остаются
+    /// и доступны по versionId, поэтому «выключить насовсем» в S3 нельзя.
+    /// Провайдер без поддержки версионирования вернёт 501.</remarks>
+    [HttpPut("{bucket}/versioning")]
+    [ProducesResponseType<BucketVersioningResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status501NotImplemented, "application/problem+json")]
+    public async Task<ActionResult<BucketVersioningResponse>> SetVersioning(
+        string bucket,
+        [FromBody] SetBucketVersioningRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Enabled is not { } enabled)
+        {
+            throw new StorageValidationException("Field 'enabled' is required.");
+        }
+
+        var versioning = await admin.SetBucketVersioningAsync(
+            bucket,
+            enabled,
+            Actor,
+            cancellationToken);
+
+        return Ok(new BucketVersioningResponse(versioning.Enabled, versioning.Suspended));
+    }
+
     /// <summary>Режим доступа</summary>
     /// <remarks>Текущий режим анонимного доступа и документ политики бакета.</remarks>
     [HttpGet("{bucket}/access")]

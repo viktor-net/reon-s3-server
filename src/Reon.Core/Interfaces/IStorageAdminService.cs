@@ -19,6 +19,19 @@ public interface IStorageAdminService
         string actor,
         CancellationToken cancellationToken);
 
+    Task<BucketVersioning> GetBucketVersioningAsync(string bucket, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Включает версионирование бакета или приостанавливает его. В S3 нет
+    /// операции «выключить насовсем»: <paramref name="enabled"/> = false
+    /// переводит бакет в состояние Suspended, уже созданные версии остаются.
+    /// </summary>
+    Task<BucketVersioning> SetBucketVersioningAsync(
+        string bucket,
+        bool enabled,
+        string actor,
+        CancellationToken cancellationToken);
+
     Task<BucketAccess> GetBucketAccessAsync(string bucket, CancellationToken cancellationToken);
 
     Task<BucketAccess> SetBucketAccessAsync(

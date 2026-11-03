@@ -280,6 +280,58 @@ public sealed partial class StorageAdminService : IStorageAdminService
         }
     }
 
+    public async Task<BucketVersioning> GetBucketVersioningAsync(
+        string bucket,
+        CancellationToken cancellationToken)
+    {
+        await GetStorageBucketAsync(bucket, cancellationToken);
+        return await _storage.GetVersioningAsync(bucket, cancellationToken);
+    }
+
+    public async Task<BucketVersioning> SetBucketVersioningAsync(
+        string bucket,
+        bool enabled,
+        string actor,
+        CancellationToken cancellationToken)
+    {
+        ValidateBucketName(bucket);
+
+        try
+        {
+            await GetStorageBucketAsync(bucket, cancellationToken);
+
+            var current = await _storage.GetVersioningAsync(bucket, cancellationToken);
+
+            if (current.Enabled != enabled)
+            {
+                await _storage.SetVersioningAsync(bucket, enabled, cancellationToken);
+                current = await _storage.GetVersioningAsync(bucket, cancellationToken);
+            }
+
+            await RecordAuditAsync(
+                actor,
+                "bucket.versioning.update",
+                bucket,
+                AuditResult.Success,
+                StatusOk,
+                new { enabled },
+                cancellationToken);
+
+            await PublishAsync(
+                StorageEvent.BucketChanged,
+                new { bucket, change = "versioning", enabled },
+                bucket,
+                cancellationToken);
+
+            return current;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await RecordFailureAsync(actor, "bucket.versioning.update", bucket, exception, cancellationToken);
+            throw;
+        }
+    }
+
     public async Task<BucketAccess> GetBucketAccessAsync(
         string bucket,
         CancellationToken cancellationToken)

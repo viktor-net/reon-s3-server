@@ -54,6 +54,12 @@ public sealed record UpdateBucketRequest(
 
 public sealed record SetBucketAccessRequest(string Mode);
 
+/// <summary>
+/// Переключение версионирования бакета. false приостанавливает создание
+/// новых версий; уже созданные версии не удаляются.
+/// </summary>
+public sealed record SetBucketVersioningRequest(bool? Enabled);
+
 public sealed record BucketAccessResponse(string Mode, string Policy);
 
 public sealed record LifecycleRuleRequest(

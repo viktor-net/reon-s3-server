@@ -168,6 +168,86 @@ public sealed class StorageAdminServiceTests
     }
 
     [Fact]
+    public async Task GetBucketVersioningAsync_ReturnsProviderState()
+    {
+        _storage.Buckets["documents"] = Now;
+        _storage.Versioning["documents"] = new BucketVersioning(Enabled: true, Suspended: false);
+
+        var versioning = await _service.GetBucketVersioningAsync("documents", CancellationToken.None);
+
+        Assert.True(versioning.Enabled);
+        Assert.False(versioning.Suspended);
+    }
+
+    [Fact]
+    public async Task SetBucketVersioningAsync_Enabled_TurnsVersioningOnAndAudits()
+    {
+        _storage.Buckets["documents"] = Now;
+
+        var versioning = await _service.SetBucketVersioningAsync(
+            "documents",
+            enabled: true,
+            "admin",
+            CancellationToken.None);
+
+        Assert.True(versioning.Enabled);
+        Assert.False(versioning.Suspended);
+
+        Assert.Contains(_audit.Entries, entry =>
+            entry.Action == "bucket.versioning.update" &&
+            entry.Resource == "documents" &&
+            entry.Result == AuditResult.Success);
+        Assert.Contains(_events.Events, storageEvent =>
+            storageEvent.Type == StorageEvent.BucketChanged &&
+            storageEvent.Bucket == "documents");
+    }
+
+    [Fact]
+    public async Task SetBucketVersioningAsync_Disabled_SuspendsButKeepsState()
+    {
+        _storage.Buckets["documents"] = Now;
+        _storage.Versioning["documents"] = new BucketVersioning(Enabled: true, Suspended: false);
+
+        var versioning = await _service.SetBucketVersioningAsync(
+            "documents",
+            enabled: false,
+            "admin",
+            CancellationToken.None);
+
+        Assert.False(versioning.Enabled);
+        Assert.True(versioning.Suspended);
+    }
+
+    [Fact]
+    public async Task SetBucketVersioningAsync_WhenProviderDoesNotSupport_RecordsFailure()
+    {
+        _storage.Buckets["documents"] = Now;
+        _storage.NotSupportedVersioning = true;
+
+        await Assert.ThrowsAsync<StorageCapabilityNotSupportedException>(() =>
+            _service.SetBucketVersioningAsync(
+                "documents",
+                enabled: true,
+                "admin",
+                CancellationToken.None));
+
+        Assert.Contains(_audit.Entries, entry =>
+            entry.Action == "bucket.versioning.update" &&
+            entry.Result == AuditResult.Failure);
+    }
+
+    [Fact]
+    public async Task SetBucketVersioningAsync_WhenBucketIsMissing_Throws()
+    {
+        await Assert.ThrowsAsync<BucketNotFoundException>(() =>
+            _service.SetBucketVersioningAsync(
+                "missing",
+                enabled: true,
+                "admin",
+                CancellationToken.None));
+    }
+
+    [Fact]
     public async Task SetBucketAccessAsync_PublicRead_WritesGetObjectPolicy()
     {
         _storage.Buckets["documents"] = Now;

@@ -231,6 +231,8 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | `POST` | `/api/admin/buckets` | Создать бакет (версионирование, Object Lock, квота) |
 | `GET` | `/api/admin/buckets/{bucket}` | Детали бакета: версии, Object Lock, шифрование, квота, использование |
 | `PATCH` | `/api/admin/buckets/{bucket}` | Версионирование и квота (Object Lock неизменяем) |
+| `GET` | `/api/admin/buckets/{bucket}/versioning` | Состояние версионирования бакета |
+| `PUT` | `/api/admin/buckets/{bucket}/versioning` | Включить (`enabled=true`) или приостановить версионирование |
 | `GET` | `/api/admin/buckets/{bucket}/access` | Анонимный доступ и текущая bucket policy |
 | `PUT` | `/api/admin/buckets/{bucket}/access` | `private` или `public-read` |
 | `GET` | `/api/admin/buckets/{bucket}/lifecycle` | Правила lifecycle |
@@ -270,7 +272,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | Бакеты | `GET/POST /api/admin/buckets` |
 | Объекты | `GET /api/admin/buckets/{bucket}/objects`, `POST .../objects`, `PUT .../objects/{**key}` |
 | Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `QUERY .../objects/{key}/presigned-urls` |
-| Настройки бакета | `PATCH /api/admin/buckets/{bucket}`, `GET/PUT .../lifecycle`, `GET .../usage` |
+| Настройки бакета | `PATCH /api/admin/buckets/{bucket}`, `GET/PUT .../versioning`, `GET/PUT .../lifecycle`, `GET .../usage` |
 | Управление доступом | `GET/PUT /api/admin/buckets/{bucket}/access` |
 | Использование и квоты | `GET /api/admin/overview`, `GET .../usage`, `POST .../usage/refresh` |
 | Журнал операций | `GET /api/admin/audit` |
@@ -295,6 +297,34 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 пересечь квоту. Статус заполнения считает сервис:
 `Ok` < 80 %, `Warning` ≥ 80 %, `Critical` ≥ 95 %, `NoQuota` — если квоты нет.
 
+### Версионирование бакетов
+
+Версионирование — свойство бакета, а не отдельного объекта: включить его можно
+только на бакет целиком. По умолчанию новый бакет создаётся без версионирования
+(`versioningEnabled: false`).
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| `GET` | `/api/admin/buckets/{bucket}/versioning` | Текущее состояние |
+| `PUT` | `/api/admin/buckets/{bucket}/versioning` | `{"enabled": true}` — включить, `{"enabled": false}` — приостановить |
+
+`enabled=false` соответствует S3 `Suspended`: новые записи перестают создавать
+версии, а уже созданные версии остаются и читаются по `versionId`. Операции
+«выключить насовсем» в S3 нет: чтобы вернуть бакет к состоянию без версий,
+удалите версии по одной (`DELETE .../objects/{key}/versions/{versionId}`) или
+пересоздайте бакет.
+
+Провайдер хранилища должен поддерживать версионирование. Для Swift s3api в
+`docker/swift/etc/swift/proxy-server.conf` нужен `allow_object_versioning = true`
+в секции `[filter:versioned_writes]` (на стенде включён); иначе запись вернёт
+`501`. Ограничения стенда на Swift:
+
+- lifecycle не реализован, поэтому `noncurrentVersionExpiration` не работает и
+  старые версии не удаляются автоматически;
+- использование и квота считаются по `ListObjectsV2` и не включают старые
+  версии, поэтому место на диске может расти незаметно;
+- `DELETE` объекта без `versionId` ставит delete-маркер, а не удаляет байты.
+
 ### Журнал операций
 
 Аудит пишется в Postgres (`audit_events`) и доступен через
@@ -303,9 +333,9 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 Один и тот же журнал пишут и фасад, и базовый API:
 
 - фасад: `bucket.create`, `bucket.update`, `bucket.access.update`,
-  `bucket.lifecycle.update`, `usage.refresh`, `object.upload`, `object.batch`,
-  `object.delete`, `object.version.delete`, `object.tags.update`,
-  `object.presign`, `folder.create`;
+  `bucket.versioning.update`, `bucket.lifecycle.update`, `usage.refresh`,
+  `object.upload`, `object.batch`, `object.delete`, `object.version.delete`,
+  `object.tags.update`, `object.presign`, `folder.create`;
 - базовый API: `file.upload`, `file.metadata.update`, `file.copy`, `file.delete`,
   `file.bulk-delete`, `upload.begin`, `upload.complete`, `upload.abort`;
 - `result`: `Success` / `Failure`, плюс `details` с деталями операции
@@ -1062,7 +1092,7 @@ S3-слой дополнительно проверен вручную прот�
 | Повторное удаление | Идемпотентно: 204, если уже удалён |
 | Перезапись | Нет: каждый upload создаёт новый `fileId` |
 | Листинг | Есть: `GET /api/files` с фильтрами и страницами |
-| Range, presigned URL, S3 versioning | Нет |
+| Range, presigned URL, S3 versioning | Нет в базовом API; версионирование и presigned URL есть в административном фасаде |
 | Максимальный размер | 1 GiB, настраивается |
 | Параллельная загрузка | Автоматическая для простой загрузки >64 MiB и явные сессии `/api/uploads` |
 | Один инстанс или несколько | Несколько инстансов безопасны: сверка и сборщик retention берут Postgres advisory lock |
@@ -1070,7 +1100,9 @@ S3-слой дополнительно проверен вручную прот�
 ## Осознанные ограничения
 
 - Нет перезаписи: каждый upload создаёт новый `fileId`.
-- Нет S3 versioning и presigned URL: наружу отдаётся только REST-фасад.
+- Нет S3 versioning для файлового домена и presigned URL в базовом API:
+  каждый upload создаёт новый `fileId`. Версионирование доступно в
+  административном фасаде на уровне бакета (`PUT .../versioning`).
 - Нет Range-запросов: файл отдаётся целиком.
 - Один бакет на инстанс.
 - Нет антивируса и content-scanning.

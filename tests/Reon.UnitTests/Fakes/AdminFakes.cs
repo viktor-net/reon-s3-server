@@ -14,7 +14,7 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
 
     public Dictionary<string, List<ObjectVersion>> Versions { get; } = new(StringComparer.Ordinal);
 
-    public Dictionary<string, bool> Versioning { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, BucketVersioning> Versioning { get; } = new(StringComparer.Ordinal);
 
     public Dictionary<string, IReadOnlyList<LifecycleRule>> Lifecycle { get; } = new(StringComparer.Ordinal);
 
@@ -23,6 +23,8 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
     public bool NotSupportedPolicy { get; set; }
 
     public bool NotSupportedTagging { get; set; }
+
+    public bool NotSupportedVersioning { get; set; }
 
     public Task<IReadOnlyList<StorageBucket>> ListBucketsAsync(CancellationToken cancellationToken)
     {
@@ -50,7 +52,9 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
     {
         Buckets[bucket] = DateTimeOffset.UtcNow;
         Objects[bucket] = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        Versioning[bucket] = versioningEnabled || objectLockEnabled;
+        Versioning[bucket] = new BucketVersioning(
+            versioningEnabled || objectLockEnabled,
+            Suspended: false);
         return Task.CompletedTask;
     }
 
@@ -67,12 +71,19 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
     public Task<BucketVersioning> GetVersioningAsync(string bucket, CancellationToken cancellationToken)
     {
         return Task.FromResult(
-            new BucketVersioning(Versioning.GetValueOrDefault(bucket), Suspended: false));
+            Versioning.TryGetValue(bucket, out var versioning)
+                ? versioning
+                : new BucketVersioning(Enabled: false, Suspended: false));
     }
 
     public Task SetVersioningAsync(string bucket, bool enabled, CancellationToken cancellationToken)
     {
-        Versioning[bucket] = enabled;
+        if (NotSupportedVersioning)
+        {
+            throw new StorageCapabilityNotSupportedException("bucket versioning");
+        }
+
+        Versioning[bucket] = new BucketVersioning(enabled, Suspended: !enabled);
         return Task.CompletedTask;
     }
 
