@@ -24,6 +24,11 @@ services:
     image: ${API_IMAGE:-reon-s3-api:local}
     container_name: reon-s3-api
     restart: unless-stopped
+    networks:
+      # default — Postgres, OTel и публикация API.
+      # s3-internal — единственный путь к Swift.
+      default:
+      s3-internal:
     ports:
       # Снаружи — тот же адрес API, что и при локальном запуске (launchSettings).
       - "10007:8080"
@@ -40,6 +45,12 @@ services:
       S3__Region: ${S3_REGION:-us-east-1}
       S3__BucketName: ${S3_BUCKET_NAME:-reon-files}
       S3__ForcePathStyle: "true"
+      # Публичный адрес API для временных ссылок на скачивание.
+      # Ссылки подписываются на этот адрес и ведут только на API,
+      # а не на S3. Менять host по заголовку Host запроса нельзя.
+      Admin__PublicBaseUrl: ${API_PUBLIC_BASE_URL:-http://localhost:10007}
+      # Секрет HMAC для временных ссылок. Обязателен, задаётся через .env/секреты.
+      Admin__DownloadLinkSecret: ${DOWNLOAD_LINK_SECRET:?Задайте DOWNLOAD_LINK_SECRET в .env}
       Database__AutoMigrate: ${DATABASE_AUTO_MIGRATE:-true}
       # Спаны и метрики уходят в коллектор по OTLP/gRPC.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317

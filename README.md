@@ -5,11 +5,49 @@
 лежит в S3. Остальные модули работают через JSON и бинарный поток и не знают
 деталей S3: ни XML, ни подписи запросов, ни параллельной загрузки файла по частям.
 
+## ЖЁСТКОЕ ТРЕБОВАНИЕ: S3 доступен только API
+
+**S3 — внутренняя деталь реализации. Прямой доступ к S3 из браузера,
+фронтенда, мобильных клиентов или других сервисов ЗАПРЕЩЁН.**
+
+Правила обязательны для всех окружений, включая dev и production:
+
+1. **Порт S3 не публикуется на хост.** Контейнер `swift` подключён только к
+   internal-сети `s3-internal`; единственный участник этой сети — контейнер API.
+   В `docker compose ps` у `reon-s3-swift` не должно быть published ports.
+2. **В production S3-креды есть только у API.** Они не попадают в ответы API,
+   логи, фронтенд и клиентские приложения. Dev-креды локального стенда лежат в
+   `appsettings.Development.json` / `.env` и в production не используются.
+   Dev-инструменты `dev-tools` используют те же dev-креды и в production не
+   запускаются.
+3. **Временные ссылки на скачивание ведут на API**, а не на S3:
+   `GET /api/admin/download?...` с HMAC-подписью и сроком действия. Ссылка не
+   раскрывает endpoint S3 и не требует от клиента доступа к хранилищу.
+4. **Presigned URL, выданный S3-клиентом, нарушает периметр.** Он по определению
+   требует сетевого доступа клиента к S3. Такой URL нельзя отдавать наружу.
+5. **Swagger UI (`docs`) и Filestash — только dev-инструменты.** Они имеют
+   прямой доступ к S3, запускаются профилем `dev-tools` и не должны работать
+   в production.
+6. Любое изменение, публикующее порт S3, возвращающее клиенту S3 endpoint или
+   S3-креды, **отклоняется на ревью**.
+
+Проверка на стенде:
+
+```bash
+docker compose ps                    # у reon-s3-swift не должно быть 0.0.0.0:10001
+docker ps --format '{{.Names}} {{.Ports}}' | grep swift
+# reon-s3-swift 8080/tcp   ← только expose, без publish
+```
+
+Исключение — локальная отладка API на хосте. Для неё есть отдельный
+`docker-compose.dev.yml`, который публикует S3 **только на loopback**
+(`127.0.0.1:10001`). Этот файл нельзя использовать в production.
+
 ## Запуск
 
-Стенд — это контейнеры Postgres, Swift S3, OpenAPI UI для Swift, Filestash и
-OpenTelemetry Collector. .NET API запускается двумя способами, и в обоих он
-доступен на `localhost:10007`.
+Стенд — это контейнеры Postgres, Swift S3 и OpenTelemetry Collector. Swagger UI
+для Swift и Filestash — необязательные dev-инструменты (профиль `dev-tools`).
+.NET API запускается двумя способами, и в обоих он доступен на `localhost:10007`.
 
 ### Что нужно
 
@@ -31,14 +69,19 @@ bash scripts/check-stand.sh          # Linux, macOS, Git Bash
 
 ### 1. Отладка в Visual Studio:
 
-Поднятие только инфраструктуры:
+Поднятие инфраструктуры для API на хосте. S3 публикуется только на loopback
+через dev-override:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 Первый запуск собирает образ Swift S3 (5–10 минут), дальше он берётся из кеша.
 Сервис `api` в этом режиме не поднимается: он входит в отдельный профиль.
+
+**Не запускайте этот вариант в production:** `docker-compose.dev.yml`
+ослабляет изоляцию S3. Штатный и production-режим — API в контейнере (см. ниже),
+где порт S3 не публикуется вообще.
 
 ### 2. Сборка .NET-проекта в контейнер: API вместе со стендом
 
@@ -48,15 +91,34 @@ docker compose up -d --build
 docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up -d --build
 ```
 
+В этом режиме S3 доступен только контейнеру API по internal-сети `s3-internal`.
+
+### Dev-инструменты (не для production)
+
+Swagger UI и Filestash имеют прямой доступ к S3 и запускаются отдельным
+профилем:
+
+```bash
+docker compose --profile dev-tools up -d
+```
+
+Не включайте профиль `dev-tools` в production. В dev-режиме контейнеры
+`docs` и `filestash` подключаются к `s3-internal` и получают доступ к S3 —
+это осознанное исключение только для локальной разработки.
+
 ### Адреса стенда
 
-- API: localhost:10007, Scalar UI —localhost:10007/scalar/api
-- S3: localhost:10001
-- Swagger UI для S3/Swift API: localhost:10002
-- Filestash: localhost:10003 (админка `/admin`, `admin` / `admin`)
+- API: localhost:10007, Scalar UI — localhost:10007/scalar/api
+- S3: **не публикуется**. Доступен только API по сети `s3-internal`.
+  Для отладки API на хосте — `127.0.0.1:10001` через `docker-compose.dev.yml`.
+- Swagger UI для S3/Swift API: localhost:10002 — только профиль `dev-tools`
+- Filestash: localhost:10003 — только профиль `dev-tools`
 - Postgres: localhost:10000, БД `reon`, пользователь `reon`
 - OpenTelemetry Collector: OTLP gRPC `localhost:10004`, OTLP HTTP
   `localhost:10005`, health `localhost:10006`
+
+S3-креды (`S3_ACCESS_KEY` / `S3_SECRET_KEY`) читает только контейнер API.
+Клиенты и фронтенд их не получают.
 
 Сборка Swift S3 лежит в `docker/swift/` — это копия из репозитория
 `reon-s3-dev` (образ `swift-s3api-aio:2.33`). Она хранится здесь, чтобы стенд
@@ -209,10 +271,10 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | Список | строки `files` с фильтрами и страницами | объекты и префиксы в S3 |
 | Загрузка | `Pending → Ready`, SHA-256, параллельная загрузка файла по частям, запись в БД | запись объекта по произвольному ключу |
 | Удаление | статусная машина + фоновая сверка | немедленное удаление объекта или версии |
-| Специфика | — | квоты, usage, access, lifecycle, presigned URL, аудит, WS |
+| Специфика | — | квоты, usage, access, lifecycle, временные ссылки, аудит, WS |
 
 Фасад не создаёт строки `files` и не участвует в сверке. Базовый API не умеет
-то, что нужно админке: список сырых объектов и «папок», версии, presigned URL,
+то, что нужно админке: список сырых объектов и «папок», версии, временные ссылки,
 квоты, политики и агрегаты по всем бакетам.
 
 Минимально для экранов прототипа нужны: обзор, список/создание/настройки
@@ -251,7 +313,8 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | `DELETE` | `/api/admin/buckets/{bucket}/objects/{key}/versions/{versionId}` | Удалить конкретную версию |
 | `GET` | `/api/admin/buckets/{bucket}/objects/{key}/tags` | Теги объекта |
 | `PUT` | `/api/admin/buckets/{bucket}/objects/{key}/tags` | Заменить теги объекта |
-| `QUERY` | `/api/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная ссылка на скачивание |
+| `QUERY` | `/api/admin/buckets/{bucket}/objects/{key}/presigned-urls` | Временная HMAC-ссылка на скачивание через API |
+| `GET` | `/api/admin/download` | Скачивание по временной ссылке; S3 вызывается только API |
 | `GET` | `/api/admin/audit` | Журнал операций с фильтрами и страницами |
 | `WS` | `/api/admin/events` | WebSocket-поток событий |
 
@@ -271,7 +334,7 @@ Postgres, статусы `Pending → Ready → Deleted`, сверка с S3 и 
 | Обзор | `GET /api/admin/overview` |
 | Бакеты | `GET/POST /api/admin/buckets` |
 | Объекты | `GET /api/admin/buckets/{bucket}/objects`, `POST .../objects`, `PUT .../objects/{**key}` |
-| Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `QUERY .../objects/{key}/presigned-urls` |
+| Карточка объекта | `GET .../objects/{key}/metadata`, `GET .../objects/{key}/versions`, `QUERY .../objects/{key}/presigned-urls` (ссылка на API, не на S3) |
 | Настройки бакета | `PATCH /api/admin/buckets/{bucket}`, `GET/PUT .../versioning`, `GET/PUT .../lifecycle`, `GET .../usage` |
 | Управление доступом | `GET/PUT /api/admin/buckets/{bucket}/access` |
 | Использование и квоты | `GET /api/admin/overview`, `GET .../usage`, `POST .../usage/refresh` |
@@ -430,7 +493,8 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   │   ├── ReonApiControllerBase.cs   # общий X-Reon-Actor и аудит для всех контроллеров
 │   │   │   ├── AdminOverviewController.cs # обзор хранилища
 │   │   │   ├── AdminBucketsController.cs  # бакеты, квоты, access, lifecycle
-│   │   │   ├── AdminObjectsController.cs  # объекты, версии, теги, presigned URL
+│   │   │   ├── AdminObjectsController.cs  # объекты, версии, теги, временные ссылки
+│   │   │   ├── AdminDownloadsController.cs # скачивание по подписанной ссылке
 │   │   │   └── AdminAuditController.cs    # журнал операций
 │   │   ├── Contracts/
 │   │   │   ├── UploadFileRequest.cs       # multipart/form-data: файл + JSON-описание
@@ -476,7 +540,7 @@ Reon.Core   [FileStorageService, domain state machine, interfaces]
 │   │   ├── Models/                        # FileListQuery, StorageStats, модели фасада
 │   │   ├── Options/
 │   │   │   ├── FileStorageOptions.cs      # лимиты, таймауты, префикс ключей
-│   │   │   └── AdminOptions.cs            # страницы, кеш usage, presigned URL
+│   │   │   └── AdminOptions.cs            # страницы, кеш usage, временные ссылки
 │   │   └── Services/
 │   │       ├── FileInput.cs               # общая валидация и построение ключа
 │   │       ├── FileStorageService.cs      # загрузка, выдача и удаление файлов
@@ -607,6 +671,11 @@ Swift s3api не поддерживает весь S3-функционал, а L
 контур. Запросы выполняются без заголовков авторизации. Если сервис нужно
 открыть в недоверенную сеть, перед ним ставится внешний шлюз с проверкой
 доступа.
+
+S3 при этом остаётся приватным: клиент никогда не обращается к S3 напрямую.
+Временные ссылки на скачивание (`QUERY .../presigned-urls`) ведут на API
+(`GET /api/admin/download`) и подписаны HMAC. Публичный адрес API берётся из
+`Admin:PublicBaseUrl`, а не из заголовка `Host`.
 
 ### Загрузка
 
@@ -897,9 +966,9 @@ curl -X POST http://localhost:10007/api/uploads/{uploadId}/abort
 |---|---|---|
 | `ConnectionStrings:Postgres` | — | Строка подключения к Postgres |
 | `Database:AutoMigrate` | `false` | Применять миграции при старте |
-| `S3:ServiceUrl` | `localhost:10001` | S3 endpoint |
-| `S3:AccessKey` | — | Access key |
-| `S3:SecretKey` | — | Secret key |
+| `S3:ServiceUrl` | `localhost:10001` | S3 endpoint. В compose — `http://swift:8080`, наружу не публикуется |
+| `S3:AccessKey` | — | Access key. Хранится только в окружении API |
+| `S3:SecretKey` | — | Secret key. Хранится только в окружении API |
 | `S3:Region` | `us-east-1` | Регион |
 | `S3:BucketName` | `reon-files` | Бакет для файлов |
 | `S3:ForcePathStyle` | `true` | Обязательно для Swift/MinIO |
@@ -926,7 +995,9 @@ curl -X POST http://localhost:10007/api/uploads/{uploadId}/abort
 | `FileStorage:RetentionSweepBatchSize` | `1000` | Сколько строк обрабатывать за один проход сборщика |
 | `Admin:UsageCacheSeconds` | `60` | Кеш рассчитанного использования бакета |
 | `Admin:MaxPageSize` | `200` | Максимальный размер страницы админ-списков |
-| `Admin:MaxPresignedUrlLifetimeSeconds` | `604800` | Максимальный срок presigned URL (7 дней) |
+| `Admin:MaxPresignedUrlLifetimeSeconds` | `604800` | Максимальный срок временной ссылки (7 дней) |
+| `Admin:PublicBaseUrl` | `http://localhost:10007` | Публичный адрес API, на который подписываются временные ссылки. Не берётся из `Host` |
+| `Admin:DownloadLinkSecret` | — | Секрет HMAC для временных ссылок. Обязателен, минимум 32 символа; в production — из секретов |
 | `Admin:MaxSearchObjects` | `5000` | Сколько объектов сканировать при поиске по подстроке |
 | `Admin:DefaultActor` | `system` | Actor, если не передан `X-Reon-Actor` |
 | `Admin:EventHeartbeatSeconds` | `30` | Интервал heartbeat в WebSocket-потоке |
@@ -1049,13 +1120,40 @@ audit_events
 
 ## Безопасность
 
+- **S3 доступен только API.** Порт S3 не публикуется, контейнер `swift`
+  подключён только к internal-сети `s3-internal`. Клиенты, фронтенд и другие
+  сервисы не имеют сетевого доступа к S3. См. раздел
+  «ЖЁСТКОЕ ТРЕБОВАНИЕ: S3 доступен только API».
 - Клиентской аутентификации нет: сервис рассчитан на доверенный внутренний контур.
 - S3-креды хранятся только на сервере и никогда не возвращаются клиенту.
+- Временные ссылки на скачивание ведут на API и подписываются HMAC
+  (`Admin:DownloadLinkSecret`). Публичный адрес API берётся из
+  `Admin:PublicBaseUrl`, а **не** из заголовка `Host` запроса.
 - Ключ объекта генерируется сервисом — path traversal через имя файла невозможен.
 - Имя файла очищается от control-символов и ограничивается по длине.
 - Content-Type проверяется на CR/LF и длину.
-- В production: TLS на reverse proxy или HTTPS в `S3:ServiceUrl`, отдельные S3-креды
-  с доступом только к `reon-files`.
+- В production: TLS на reverse proxy или HTTPS в публичном адресе API, отдельные
+  S3-креды с доступом только к `reon-files`.
+- Профиль `dev-tools` (Swagger UI, Filestash) не включать в production: эти
+  инструменты имеют прямой доступ к S3 и предназначены только для разработки.
+
+### Почему публичный адрес берётся из конфигурации, а не из заголовка Host
+
+Заголовок `Host` (и `X-Forwarded-Host`) контролируется клиентом. Если строить
+подписанную ссылку из него, злоумышленник может подставить чужой домен и
+получить валидную ссылку, ведущую на его хост (host header injection, cache
+poisoning, фишинг). Поэтому:
+
+- публичный адрес API задаётся в `Admin:PublicBaseUrl`;
+- `Admin:PublicBaseUrl` должен быть доступен клиенту: `localhost` подходит
+  только для локального стенда, для других машин — внешний hostname;
+- HMAC-подпись покрывает bucket, key, versionId и срок действия;
+- `Host` запроса не участвует в подписи и не влияет на URL;
+- если API стоит за reverse proxy, прокси передаёт исходный `Host` для
+  логирования, но формирование ссылок всё равно идёт от `Admin:PublicBaseUrl`;
+- для S3-presigned URL правило то же: подпись включает `Host`, поэтому
+  подставлять его из запроса нельзя, а замена host после подписи ломает
+  `SignatureDoesNotMatch`.
 
 ## Тесты
 
@@ -1092,7 +1190,7 @@ S3-слой дополнительно проверен вручную прот�
 | Повторное удаление | Идемпотентно: 204, если уже удалён |
 | Перезапись | Нет: каждый upload создаёт новый `fileId` |
 | Листинг | Есть: `GET /api/files` с фильтрами и страницами |
-| Range, presigned URL, S3 versioning | Нет в базовом API; версионирование и presigned URL есть в административном фасаде |
+| Range, временные ссылки, S3 versioning | Нет в базовом API; версионирование и временные ссылки есть в административном фасаде. Временная ссылка ведёт на API, не на S3 |
 | Максимальный размер | 1 GiB, настраивается |
 | Параллельная загрузка | Автоматическая для простой загрузки >64 MiB и явные сессии `/api/uploads` |
 | Один инстанс или несколько | Несколько инстансов безопасны: сверка и сборщик retention берут Postgres advisory lock |
@@ -1100,9 +1198,10 @@ S3-слой дополнительно проверен вручную прот�
 ## Осознанные ограничения
 
 - Нет перезаписи: каждый upload создаёт новый `fileId`.
-- Нет S3 versioning для файлового домена и presigned URL в базовом API:
+- Нет S3 versioning для файлового домена и временных ссылок в базовом API:
   каждый upload создаёт новый `fileId`. Версионирование доступно в
-  административном фасаде на уровне бакета (`PUT .../versioning`).
+  административном фасаде на уровне бакета (`PUT .../versioning`), временные
+  ссылки — в фасаде и ведут на API (`/api/admin/download`).
 - Нет Range-запросов: файл отдаётся целиком.
 - Один бакет на инстанс.
 - Нет антивируса и content-scanning.
@@ -1197,6 +1296,10 @@ OTLP-endpoint.
 | Стенд не поднимается на новой машине | `bash scripts/check-stand.sh` или `pwsh -File scripts/check-stand.ps1`: Docker, `.env`, файлы, порты |
 | `Could not ensure S3 bucket` | Запущен ли `swift-s3api`, верны ли `S3:ServiceUrl` и креды |
 | `502` | Доступность S3, path-style, регион |
+| `Admin:DownloadLinkSecret is required` | Задайте `DOWNLOAD_LINK_SECRET` в `.env` (профиль api) или `Admin:DownloadLinkSecret` в конфигурации |
+| `403 Download link is invalid or expired` | Ссылка истекла или подпись изменена; создайте новую |
+| S3 не открывается с хоста | Это ожидаемо: S3 не публикуется. Для отладки API на хосте используйте `docker-compose.dev.yml` |
+| S3 опубликован на `0.0.0.0:10001` | Нарушение периметра: уберите `ports` у `swift`, используйте `127.0.0.1` только в dev-override |
 | Scalar UI пустой | Открывайте `localhost:10007/scalar/api`; OpenAPI — `/openapi/api.json`. Scalar запрашивает схему относительным путём, для этого в приложении оставлены алиасы. |
 | `Postgres is not reachable` | `docker compose ps`, строка подключения |
 | API в контейнере не видит Postgres/Swift | Внутри compose используйте `postgres:5432` и `swift:8080`, а не `localhost`; проверьте `.env` и `docker compose ps` |

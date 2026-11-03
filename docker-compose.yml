@@ -1,9 +1,15 @@
-# Базовая инфраструктура для локальной разработки и отладки API на хосте:
-#   docker compose up -d
+# Базовая инфраструктура. S3 (swift) НЕ публикуется на хост: он доступен
+# только контейнеру API по внутренней сети s3-internal.
 #
-# Прод-подобный запуск API в контейнере — отдельный профиль api:
+# Штатный запуск API в контейнере:
 #   docker compose -f docker-compose.yml -f docker-compose.api.yml \
 #     --profile api up -d --build
+#
+# Отладка API на хосте: S3 публикуется только на loopback через override:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Dev-инструменты (Swagger UI, Filestash) — отдельный профиль, не для production:
+#   docker compose --profile dev-tools up -d
 services:
   postgres:
     image: postgres:16-alpine
@@ -30,7 +36,10 @@ services:
   # Dockerfile и конфиги Swift — копия из reon-s3-dev, поэтому второй
   # репозиторий для запуска стенда не нужен. Готовый образ можно подставить
   # через SWIFT_IMAGE в .env, тогда сборка не выполняется.
-  # Наружу опубликован порт 10001, локальный API ходит на localhost:10001.
+  #
+  # ЖЁСТКОЕ ТРЕБОВАНИЕ: порт Swift не публикуется на хост. Контейнер подключён
+  # только к internal-сети s3-internal, куда входит только API. Клиенты,
+  # фронтенд и другие сервисы не должны иметь сетевой доступ к S3.
   swift:
     build:
       context: ./docker/swift
@@ -39,8 +48,10 @@ services:
     hostname: swift
     init: true
     restart: unless-stopped
-    ports:
-      - "10001:8080"
+    expose:
+      - "8080"
+    networks:
+      - s3-internal
     volumes:
       - swift-data:/srv/node
     stop_grace_period: 30s
@@ -53,13 +64,19 @@ services:
 
   # Swagger UI для S3/Swift API: http://localhost:10002.
   # Nginx, подпись запросов и openapi.yaml лежат в docker/swagger/.
+  # Только для локальной разработки: инструмент имеет доступ к S3,
+  # поэтому запускается отдельным профилем и не должен работать в production.
   docs:
+    profiles: ["dev-tools"]
     image: swaggerapi/swagger-ui:v5.17.14
     container_name: reon-s3-docs
     restart: unless-stopped
     depends_on:
       swift:
         condition: service_healthy
+    networks:
+      - default
+      - s3-internal
     ports:
       - "10002:8080"
     environment:
@@ -75,9 +92,12 @@ services:
       - ./docker/swagger/swagger-signer.js:/spec/swagger-signer.js:ro
 
   # Веб-менеджер файлов поверх S3: http://localhost:10003 (admin / admin).
+  # Только для локальной разработки: имеет прямой доступ к S3,
+  # запускается профилем dev-tools и не должен работать в production.
   # Seed-конфиг копируется в volume filestash-state при первом старте,
   # дальше изменения из /admin живут в этом volume.
   filestash-init:
+    profiles: ["dev-tools"]
     image: busybox:1.37.0
     container_name: reon-s3-filestash-init
     restart: "no"
@@ -96,10 +116,14 @@ services:
         chown -R 1000:1000 /state
 
   filestash:
+    profiles: ["dev-tools"]
     image: machines/filestash:latest
     container_name: reon-s3-filestash
     restart: unless-stopped
     user: "1000:1000"
+    networks:
+      - default
+      - s3-internal
     depends_on:
       filestash-init:
         condition: service_completed_successfully
@@ -133,6 +157,14 @@ services:
       - ./docker/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
       # json-file логи контейнеров Docker (на Docker Desktop — внутри VM демона).
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+
+networks:
+  # Обычная сеть стенда: API, Postgres, OTel и dev-инструменты.
+  default:
+  # Изолированная сеть хранилища. В неё входят только Swift и API.
+  # internal: true запрещает выход наружу и публикацию портов.
+  s3-internal:
+    internal: true
 
 volumes:
   reon-postgres-data:

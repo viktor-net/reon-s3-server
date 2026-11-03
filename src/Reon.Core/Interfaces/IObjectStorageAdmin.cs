@@ -90,6 +90,11 @@ public interface IObjectStorageAdmin
         IReadOnlyDictionary<string, string> tags,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// S3-presigned URL для публично доступного S3. В текущей архитектуре S3
+    /// приватный, поэтому наружу такие ссылки не отдаются; используйте
+    /// временные ссылки через API (<see cref="IStorageAdminService.CreatePresignedUrlAsync"/>).
+    /// </summary>
     string CreatePresignedGetUrl(
         string bucket,
         string key,

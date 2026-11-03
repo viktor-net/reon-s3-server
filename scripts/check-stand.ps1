@@ -122,9 +122,9 @@ if ($standRunning) {
 } else {
     $ports = @(
         @{ Port = 10000; Name = 'Postgres' },
-        @{ Port = 10001; Name = 'Swift S3' },
-        @{ Port = 10002; Name = 'Swagger UI' },
-        @{ Port = 10003; Name = 'Filestash' },
+        # S3 (10001), Swagger UI (10002) и Filestash (10003) не публикуются
+        # по умолчанию: S3 изолирован, dev-инструменты — профиль dev-tools.
+        # 10001 проверяется только при запуске с docker-compose.dev.yml.
         @{ Port = 10004; Name = 'OTLP gRPC' },
         @{ Port = 10005; Name = 'OTLP HTTP' },
         @{ Port = 10006; Name = 'OTel health' },
@@ -158,7 +158,8 @@ if ($failed) {
 }
 
 Write-Host 'Можно запускать:' -ForegroundColor Green
-Write-Host '  docker compose up -d --build'
+Write-Host '  API на хосте:      docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build'
+Write-Host '  API в контейнере:  docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up -d --build'
 if ($warnings -gt 0) {
     Write-Host "(предупреждений: $warnings — они не блокируют запуск)" -ForegroundColor Yellow
 }

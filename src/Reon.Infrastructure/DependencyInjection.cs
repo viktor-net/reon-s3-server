@@ -55,6 +55,14 @@ public static class DependencyInjection
             .Validate(
                 options => options.MaxPresignedUrlLifetimeSeconds is > 0 and <= 604_800,
                 "Admin:MaxPresignedUrlLifetimeSeconds must be between 1 and 604800.")
+            .Validate(
+                options => Uri.TryCreate(options.PublicBaseUrl, UriKind.Absolute, out var uri) &&
+                           (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps),
+                "Admin:PublicBaseUrl must be an absolute HTTP(S) URL.")
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.DownloadLinkSecret) &&
+                           options.DownloadLinkSecret.Length >= 32,
+                "Admin:DownloadLinkSecret is required and must be at least 32 characters.")
             .ValidateOnStart();
 
         services.AddDbContext<ReonDbContext>(options =>

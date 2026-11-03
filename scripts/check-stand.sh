@@ -110,7 +110,10 @@ else
     }
 
     busy=()
-    for entry in 10000:Postgres 10001:'Swift S3' 10002:'Swagger UI' 10003:Filestash \
+    # S3 (10001), Swagger UI (10002) и Filestash (10003) не публикуются
+    # по умолчанию: S3 изолирован, dev-инструменты — профиль dev-tools.
+    # 10001 проверяется только при запуске с docker-compose.dev.yml.
+    for entry in 10000:Postgres \
                  10004:'OTLP gRPC' 10005:'OTLP HTTP' 10006:'OTel health' 10007:API; do
         port="${entry%%:*}"
         name="${entry#*:}"
@@ -131,7 +134,8 @@ if [ "$failed" -eq 1 ]; then
 fi
 
 printf 'Можно запускать:\n'
-printf '  docker compose up -d --build\n'
+printf '  API на хосте:      docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build\n'
+printf '  API в контейнере:  docker compose -f docker-compose.yml -f docker-compose.api.yml --profile api up -d --build\n'
 if [ "$warnings" -gt 0 ]; then
     printf '(предупреждений: %d — они не блокируют запуск)\n' "$warnings"
 fi

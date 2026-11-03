@@ -10,8 +10,15 @@ public sealed class AdminOptions
     // Верхняя граница размера страницы на административных списках.
     public int MaxPageSize { get; set; } = 200;
 
-    // Максимальный срок жизни presigned URL (ограничение S3 — 7 дней).
+    // Максимальный срок жизни временной ссылки на скачивание (7 дней).
     public int MaxPresignedUrlLifetimeSeconds { get; set; } = 604_800;
+
+    // Публичный адрес API, на который подписываются временные ссылки.
+    // Не берётся из заголовка Host: Host контролируется клиентом.
+    public string PublicBaseUrl { get; set; } = "http://localhost:10007";
+
+    // Секрет HMAC для временных ссылок на скачивание. Обязателен в production.
+    public string DownloadLinkSecret { get; set; } = string.Empty;
 
     // Верхняя граница числа объектов при поиске по подстроке.
     // В S3 нет нативного поиска, поэтому сервис фильтрует объекты в памяти.

@@ -41,9 +41,9 @@ public sealed partial class StorageAdminService : IStorageAdminService
     /// <param name="auditor">Запись операций в журнал.</param>
     /// <param name="quotaGuard">Проверка квоты перед загрузкой объекта.</param>
     /// <param name="events">Публикация событий WebSocket-подписчикам.</param>
-    /// <param name="clock">Время для аудита, usage и presigned URL.</param>
+    /// <param name="clock">Время для аудита, usage и временных ссылок.</param>
     /// <param name="fileOptions">Лимиты тегов и метаданных, общие с файловым API.</param>
-    /// <param name="adminOptions">Кеш usage, лимиты страниц и срок presigned URL.</param>
+    /// <param name="adminOptions">Кеш usage, лимиты страниц и срок временных ссылок.</param>
     /// <param name="logger">Лог откатов и ошибок фоновых операций.</param>
     public StorageAdminService(
         IObjectStorageAdmin storage,
@@ -842,7 +842,13 @@ public sealed partial class StorageAdminService : IStorageAdminService
             await GetObjectInfoAsync(bucket, key, versionId, cancellationToken);
 
             var expiresAt = _clock.UtcNow.Add(expiresIn);
-            var url = _storage.CreatePresignedGetUrl(bucket, key, versionId, expiresAt);
+            var url = DownloadLinkSigner.Create(
+                _adminOptions.DownloadLinkSecret,
+                _adminOptions.PublicBaseUrl,
+                bucket,
+                key,
+                versionId,
+                expiresAt);
 
             await RecordAuditAsync(
                 actor,

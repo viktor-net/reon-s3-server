@@ -4,7 +4,7 @@ namespace Reon.Api.Controllers;
 
 /// <summary>
 /// Объекты внутри бакета: список, загрузка, скачивание, метаданные, версии,
-/// теги и presigned URL.
+/// теги и временные ссылки.
 /// </summary>
 /// <param name="admin">Сценарии фасада: операции над объектами и версиями.</param>
 /// <param name="tempFiles">Буферизация загружаемых файлов и подсчёт SHA-256.</param>
@@ -310,8 +310,13 @@ public sealed class AdminObjectsController(
         return Ok(request.Tags);
     }
 
-    /// <summary>Подписанная ссылка</summary>
-    /// <remarks>Создаёт временную подписанную ссылку на прямое скачивание. Запрос не меняет состояние сервера, срок жизни передаётся телом – QUERY запрос.</remarks>
+    /// <summary>Временная ссылка на скачивание</summary>
+    /// <remarks>
+    /// Создаёт временную HMAC-подписанную ссылку на этот API. Ссылка не ведёт
+    /// напрямую в S3 и не раскрывает endpoint объектного хранилища: клиент
+    /// скачивает объект через API, а S3 остаётся доступным только сервису.
+    /// Запрос не меняет состояние сервера, срок жизни передаётся телом – QUERY запрос.
+    /// </remarks>
     [HttpQuery("{key}/presigned-urls")]
     [ProducesResponseType<PresignedUrlResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]

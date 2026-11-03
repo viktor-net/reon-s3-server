@@ -1,0 +1,17 @@
+# Только для отладки API на хосте (dotnet run / Visual Studio).
+#
+# Публикует S3 на loopback, чтобы appsettings.Development.json с
+# S3:ServiceUrl=http://localhost:10001 продолжал работать.
+#
+# ВНИМАНИЕ: этот файл ослабляет изоляцию S3. Не использовать в production
+# и не передавать вместе с production-конфигурацией.
+#
+# Запуск:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+services:
+  swift:
+    ports:
+      - "127.0.0.1:10001:8080"
+    networks:
+      default:
+      s3-internal:
