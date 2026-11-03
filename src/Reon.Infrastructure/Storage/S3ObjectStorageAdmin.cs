@@ -336,7 +336,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
                 },
                 cancellationToken);
         }
-        catch (AmazonS3Exception exception) when (IsNotSupported(exception))
+        catch (AmazonS3Exception exception) when (IsNotSupported(exception) || IsUnsupportedPayload(exception))
         {
             throw new StorageCapabilityNotSupportedException("lifecycle rules");
         }
@@ -799,6 +799,18 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
     {
         return exception.StatusCode is HttpStatusCode.NotImplemented or HttpStatusCode.MethodNotAllowed ||
                exception.ErrorCode is "NotImplemented" or "MethodNotAllowed";
+    }
+
+    /// <summary>
+    /// Провайдер без поддержки операции разбирает тело запроса чужим
+    /// обработчиком и отвечает 400 MalformedXML вместо 501. Для lifecycle так
+    /// ведёт себя Swift s3api: XML от AWS SDK валиден, значит провайдер просто
+    /// не умеет эту операцию.
+    /// </summary>
+    private static bool IsUnsupportedPayload(AmazonS3Exception exception)
+    {
+        return exception.StatusCode == HttpStatusCode.BadRequest &&
+               exception.ErrorCode is "MalformedXML";
     }
 
     private static ObjectStorageException ToStorageException(AmazonS3Exception exception, string operation)

@@ -1,8 +1,6 @@
 # Changelog
 
-Все заметные изменения проекта. Формат основан на
-[Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — по SemVer,
-когда в проекте появится нумерация релизов.
+История изменений репозитория. Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
 ## [Unreleased]
 
