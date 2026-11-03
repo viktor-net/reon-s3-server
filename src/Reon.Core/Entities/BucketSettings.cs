@@ -22,6 +22,12 @@ public sealed class BucketSettings
 
     public BucketAccessMode AccessMode { get; private set; }
 
+    /// <summary>Защита бакета от удаления включена.</summary>
+    public bool ObjectLockEnabled { get; private set; }
+
+    /// <summary>Источник защиты: настоящий S3 Object Lock или сервисная блокировка.</summary>
+    public ObjectLockMode ObjectLockMode { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -29,13 +35,16 @@ public sealed class BucketSettings
     public static BucketSettings Create(
         string bucket,
         long? quotaBytes,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        ObjectLockMode objectLockMode = ObjectLockMode.None)
     {
         return new BucketSettings
         {
             Bucket = bucket,
             QuotaBytes = quotaBytes,
             AccessMode = BucketAccessMode.Private,
+            ObjectLockEnabled = objectLockMode != ObjectLockMode.None,
+            ObjectLockMode = objectLockMode,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -50,6 +59,13 @@ public sealed class BucketSettings
     public void SetAccessMode(BucketAccessMode accessMode, DateTimeOffset now)
     {
         AccessMode = accessMode;
+        UpdatedAt = now;
+    }
+
+    public void SetObjectLock(ObjectLockMode mode, DateTimeOffset now)
+    {
+        ObjectLockMode = mode;
+        ObjectLockEnabled = mode != ObjectLockMode.None;
         UpdatedAt = now;
     }
 }

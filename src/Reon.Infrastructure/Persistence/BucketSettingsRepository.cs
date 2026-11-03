@@ -24,6 +24,17 @@ public sealed class BucketSettingsRepository(ReonDbContext dbContext) : IBucketS
         await dbContext.BucketSettings.AddAsync(settings, cancellationToken);
     }
 
+    public async Task DeleteAsync(string bucket, CancellationToken cancellationToken)
+    {
+        var settings = await dbContext.BucketSettings
+            .FirstOrDefaultAsync(item => item.Bucket == bucket, cancellationToken);
+
+        if (settings is not null)
+        {
+            dbContext.BucketSettings.Remove(settings);
+        }
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         return dbContext.SaveChangesAsync(cancellationToken);

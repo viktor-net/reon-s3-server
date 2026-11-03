@@ -65,6 +65,14 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
                 StatusCodes.Status409Conflict,
                 "Bucket quota exceeded",
                 quota.Message),
+            ObjectLockedException objectLocked => (
+                StatusCodes.Status409Conflict,
+                "Object is protected from deletion",
+                objectLocked.Message),
+            BucketNotEmptyException bucketNotEmpty => (
+                StatusCodes.Status409Conflict,
+                "Bucket is not empty",
+                bucketNotEmpty.Message),
             StorageCapabilityNotSupportedException capability => (
                 StatusCodes.Status501NotImplemented,
                 "Operation is not supported by the storage provider",
@@ -113,9 +121,29 @@ public sealed partial class CoreExceptionHandler(ILogger<CoreExceptionHandler> l
         };
         problem.Extensions["traceId"] = httpContext.TraceIdentifier;
 
-        if (exception is FileExpiredException)
+        switch (exception)
         {
-            problem.Extensions["code"] = "FILE_EXPIRED";
+            case FileExpiredException:
+                problem.Extensions["code"] = "FILE_EXPIRED";
+                break;
+            case FileTooLargeException tooLarge:
+                problem.Extensions["code"] = "FILE_TOO_LARGE";
+                problem.Extensions["maxBytes"] = tooLarge.MaxBytes;
+                break;
+            case QuotaExceededException:
+                problem.Extensions["code"] = "QUOTA_EXCEEDED";
+                break;
+            case ObjectLockedException objectLocked:
+                problem.Extensions["code"] = "OBJECT_LOCKED";
+                problem.Extensions["objectLockMode"] = objectLocked.Mode.ToString();
+                break;
+            case BucketNotEmptyException:
+                problem.Extensions["code"] = "BUCKET_NOT_EMPTY";
+                break;
+            case StorageCapabilityNotSupportedException capability:
+                problem.Extensions["code"] = "CAPABILITY_NOT_SUPPORTED";
+                problem.Extensions["capability"] = capability.Capability.ToApiValue();
+                break;
         }
 
         await httpContext.Response.WriteAsJsonAsync(

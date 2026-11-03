@@ -17,6 +17,8 @@ public sealed class ReonDbContext(DbContextOptions<ReonDbContext> options) : DbC
 
     public DbSet<AuditEntry> AuditEvents => Set<AuditEntry>();
 
+    public DbSet<StorageCapabilityRecord> StorageCapabilities => Set<StorageCapabilityRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ReonDbContext).Assembly);

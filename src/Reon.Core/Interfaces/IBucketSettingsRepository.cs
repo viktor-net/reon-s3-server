@@ -8,5 +8,8 @@ public interface IBucketSettingsRepository
 
     Task AddAsync(BucketSettings settings, CancellationToken cancellationToken);
 
+    /// <summary>Удаляет настройки бакета. Отсутствующая строка не считается ошибкой.</summary>
+    Task DeleteAsync(string bucket, CancellationToken cancellationToken);
+
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }

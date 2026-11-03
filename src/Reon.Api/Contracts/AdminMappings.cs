@@ -19,8 +19,11 @@ internal static class AdminMappings
             summary.Name,
             summary.CreatedAt,
             new BucketVersioningResponse(summary.Versioning.Enabled, summary.Versioning.Suspended),
-            new BucketSecurityResponse(summary.Security.ObjectLockEnabled, summary.Security.Encryption),
-            summary.AccessMode.ToString(),
+            new BucketSecurityResponse(
+                summary.Security.ObjectLockEnabled,
+                summary.Security.Encryption,
+                summary.Security.ObjectLockMode.ToString()),
+            summary.AccessMode.ToApiValue(),
             summary.Usage.ToResponse());
     }
 

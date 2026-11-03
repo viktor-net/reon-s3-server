@@ -20,4 +20,7 @@ public sealed class S3Options
 
     /// <summary>Создаёт бакет при старте, если его нет.</summary>
     public bool EnsureBucket { get; set; } = true;
+
+    /// <summary>Базовый срез возможностей провайдера для реестра в Postgres.</summary>
+    public S3CapabilitiesOptions Capabilities { get; set; } = new();
 }

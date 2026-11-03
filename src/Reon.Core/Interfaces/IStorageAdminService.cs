@@ -19,6 +19,15 @@ public interface IStorageAdminService
         string actor,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Удаляет пустой бакет и его административные настройки. Бакет с
+    /// включённой защитой от удаления удалить нельзя.
+    /// </summary>
+    Task DeleteBucketAsync(
+        string bucket,
+        string actor,
+        CancellationToken cancellationToken);
+
     Task<BucketVersioning> GetBucketVersioningAsync(string bucket, CancellationToken cancellationToken);
 
     /// <summary>

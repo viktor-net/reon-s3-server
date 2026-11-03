@@ -11,6 +11,9 @@ public sealed class BucketSettingsConfiguration : IEntityTypeConfiguration<Bucke
             table.HasCheckConstraint(
                 "ck_bucket_settings_access_mode",
                 "\"access_mode\" IN ('Private', 'PublicRead')");
+            table.HasCheckConstraint(
+                "ck_bucket_settings_object_lock_mode",
+                "\"object_lock_mode\" IN ('None', 'Provider', 'Service')");
         });
 
         builder.HasKey(settings => settings.Bucket);
@@ -27,6 +30,18 @@ public sealed class BucketSettingsConfiguration : IEntityTypeConfiguration<Bucke
             .HasColumnName("access_mode")
             .HasConversion<string>()
             .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(settings => settings.ObjectLockEnabled)
+            .HasColumnName("object_lock_enabled")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(settings => settings.ObjectLockMode)
+            .HasColumnName("object_lock_mode")
+            .HasConversion<string>()
+            .HasMaxLength(16)
+            .HasDefaultValue(ObjectLockMode.None)
             .IsRequired();
 
         builder.Property(settings => settings.CreatedAt)

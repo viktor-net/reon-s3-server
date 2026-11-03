@@ -105,6 +105,20 @@ namespace Reon.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("created_at");
 
+                    b.Property<bool>("ObjectLockEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("object_lock_enabled");
+
+                    b.Property<string>("ObjectLockMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("None")
+                        .HasColumnName("object_lock_mode");
+
                     b.Property<long?>("QuotaBytes")
                         .HasColumnType("bigint")
                         .HasColumnName("quota_bytes");
@@ -118,6 +132,8 @@ namespace Reon.Infrastructure.Persistence.Migrations
                     b.ToTable("bucket_settings", null, t =>
                         {
                             t.HasCheckConstraint("ck_bucket_settings_access_mode", "\"access_mode\" IN ('Private', 'PublicRead')");
+
+                            t.HasCheckConstraint("ck_bucket_settings_object_lock_mode", "\"object_lock_mode\" IN ('None', 'Provider', 'Service')");
                         });
                 });
 
@@ -407,6 +423,39 @@ namespace Reon.Infrastructure.Persistence.Migrations
                     b.HasKey("UploadId", "PartNumber");
 
                     b.ToTable("multipart_upload_parts", (string)null);
+                });
+
+            modelBuilder.Entity("Reon.Core.Entities.StorageCapabilityRecord", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("text")
+                        .HasColumnName("details");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<bool>("Supported")
+                        .HasColumnType("boolean")
+                        .HasColumnName("supported");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("storage_capabilities", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_storage_capabilities_source", "\"source\" IN ('config', 'learned', 'default')");
+                        });
                 });
 
             modelBuilder.Entity("Reon.Core.Entities.MultipartUploadPart", b =>

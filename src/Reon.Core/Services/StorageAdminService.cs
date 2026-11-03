@@ -23,6 +23,7 @@ public sealed partial class StorageAdminService : IStorageAdminService
 
     private readonly IObjectStorageAdmin _storage;
     private readonly IBucketSettingsRepository _settings;
+    private readonly IStorageCapabilityStore _capabilities;
     private readonly IAuditRepository _audit;
     private readonly IStorageAuditor _auditor;
     private readonly IStorageQuotaGuard _quotaGuard;
@@ -37,6 +38,7 @@ public sealed partial class StorageAdminService : IStorageAdminService
     /// </summary>
     /// <param name="storage">Административные операции S3 по всем бакетам.</param>
     /// <param name="settings">Квоты и режим доступа бакетов в Postgres.</param>
+    /// <param name="capabilities">Реестр возможностей S3-провайдера в Postgres.</param>
     /// <param name="audit">Чтение журнала операций.</param>
     /// <param name="auditor">Запись операций в журнал.</param>
     /// <param name="quotaGuard">Проверка квоты перед загрузкой объекта.</param>
@@ -48,6 +50,7 @@ public sealed partial class StorageAdminService : IStorageAdminService
     public StorageAdminService(
         IObjectStorageAdmin storage,
         IBucketSettingsRepository settings,
+        IStorageCapabilityStore capabilities,
         IAuditRepository audit,
         IStorageAuditor auditor,
         IStorageQuotaGuard quotaGuard,
@@ -59,6 +62,7 @@ public sealed partial class StorageAdminService : IStorageAdminService
     {
         _storage = storage;
         _settings = settings;
+        _capabilities = capabilities;
         _audit = audit;
         _auditor = auditor;
         _quotaGuard = quotaGuard;
@@ -122,16 +126,25 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 summary.Name.Contains(query.Search.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
-        filtered = (query.Sort?.ToLowerInvariant()) switch
+        var descending = string.Equals(
+            query.Direction,
+            "desc",
+            StringComparison.OrdinalIgnoreCase);
+
+        var ordered = (query.Sort?.ToLowerInvariant()) switch
         {
-            "size" => filtered
-                .OrderByDescending(summary => summary.Usage.UsedBytes)
-                .ThenBy(summary => summary.Name, StringComparer.Ordinal),
-            "objects" => filtered
-                .OrderByDescending(summary => summary.Usage.ObjectCount)
-                .ThenBy(summary => summary.Name, StringComparer.Ordinal),
-            _ => filtered.OrderBy(summary => summary.Name, StringComparer.Ordinal),
+            "size" => descending
+                ? filtered.OrderByDescending(summary => summary.Usage.UsedBytes)
+                : filtered.OrderBy(summary => summary.Usage.UsedBytes),
+            "objects" => descending
+                ? filtered.OrderByDescending(summary => summary.Usage.ObjectCount)
+                : filtered.OrderBy(summary => summary.Usage.ObjectCount),
+            _ => descending
+                ? filtered.OrderByDescending(summary => summary.Name, StringComparer.Ordinal)
+                : filtered.OrderBy(summary => summary.Name, StringComparer.Ordinal),
         };
+
+        filtered = ordered.ThenBy(summary => summary.Name, StringComparer.Ordinal);
 
         var items = filtered.ToArray();
         var pageItems = items
@@ -173,14 +186,19 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 throw new BucketAlreadyExistsException(bucket);
             }
 
-            await _storage.CreateBucketAsync(
+            var versioningEnabled = command.VersioningEnabled || command.ObjectLockEnabled;
+            var objectLockMode = await CreateBucketWithObjectLockAsync(
                 bucket,
-                command.VersioningEnabled || command.ObjectLockEnabled,
+                versioningEnabled,
                 command.ObjectLockEnabled,
                 cancellationToken);
 
             var now = _clock.UtcNow;
-            var settings = BucketSettings.Create(bucket, command.QuotaBytes, now);
+            var settings = BucketSettings.Create(
+                bucket,
+                command.QuotaBytes,
+                now,
+                objectLockMode);
             await _settings.AddAsync(settings, cancellationToken);
             await _settings.SaveChangesAsync(cancellationToken);
 
@@ -190,7 +208,13 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 bucket,
                 AuditResult.Success,
                 StatusCreated,
-                new { command.VersioningEnabled, command.ObjectLockEnabled, command.QuotaBytes },
+                new
+                {
+                    command.VersioningEnabled,
+                    command.ObjectLockEnabled,
+                    ObjectLockMode = objectLockMode.ToString(),
+                    command.QuotaBytes,
+                },
                 cancellationToken);
 
             await PublishAsync(
@@ -208,6 +232,49 @@ public sealed partial class StorageAdminService : IStorageAdminService
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await RecordFailureAsync(actor, "bucket.create", bucket, exception, cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task DeleteBucketAsync(
+        string bucket,
+        string actor,
+        CancellationToken cancellationToken)
+    {
+        ValidateBucketName(bucket);
+
+        try
+        {
+            var storageBucket = await GetStorageBucketAsync(bucket, cancellationToken);
+            var settings = await EnsureSettingsAsync(storageBucket, cancellationToken);
+
+            if (settings.ObjectLockEnabled)
+            {
+                throw new ObjectLockedException(bucket, key: null, settings.ObjectLockMode);
+            }
+
+            await _storage.DeleteBucketAsync(bucket, cancellationToken);
+            await _settings.DeleteAsync(bucket, cancellationToken);
+            await _settings.SaveChangesAsync(cancellationToken);
+
+            await RecordAuditAsync(
+                actor,
+                "bucket.delete",
+                bucket,
+                AuditResult.Success,
+                StatusNoContent,
+                details: null,
+                cancellationToken);
+
+            await PublishAsync(
+                StorageEvent.BucketChanged,
+                new { bucket, change = "deleted" },
+                bucket,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await RecordFailureAsync(actor, "bucket.delete", bucket, exception, cancellationToken);
             throw;
         }
     }
@@ -245,6 +312,24 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 }
             }
 
+            if (command.ObjectLockEnabled is { } objectLockEnabled)
+            {
+                if (settings.ObjectLockMode == ObjectLockMode.Provider && !objectLockEnabled)
+                {
+                    throw new StorageValidationException(
+                        "S3 Object Lock cannot be disabled after bucket creation.");
+                }
+
+                if (settings.ObjectLockMode == ObjectLockMode.Service && !objectLockEnabled)
+                {
+                    settings.SetObjectLock(ObjectLockMode.None, now);
+                }
+                else if (settings.ObjectLockMode == ObjectLockMode.None && objectLockEnabled)
+                {
+                    settings.SetObjectLock(ObjectLockMode.Service, now);
+                }
+            }
+
             if (command.RemoveQuota)
             {
                 settings.SetQuota(null, now);
@@ -262,7 +347,13 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 bucket,
                 AuditResult.Success,
                 StatusOk,
-                new { command.VersioningEnabled, command.QuotaBytes, command.RemoveQuota },
+                new
+                {
+                    command.VersioningEnabled,
+                    command.QuotaBytes,
+                    command.RemoveQuota,
+                    command.ObjectLockEnabled,
+                },
                 cancellationToken);
 
             await PublishAsync(
@@ -501,6 +592,18 @@ public sealed partial class StorageAdminService : IStorageAdminService
                 cancellationToken)
             : await SearchObjectsAsync(query, prefix, delimiter, maxKeys, cancellationToken);
 
+        // Папка в S3 — пустой объект-маркер с завершающим «/». Внутри самой
+        // папки этот маркер не должен выглядеть как отдельный объект.
+        if (prefix is not null)
+        {
+            listing = listing with
+            {
+                Objects = listing.Objects
+                    .Where(item => !string.Equals(item.ObjectKey, prefix, StringComparison.Ordinal))
+                    .ToArray(),
+            };
+        }
+
         if (!query.IncludeContentType || listing.Objects.Count == 0)
         {
             return listing;
@@ -554,7 +657,18 @@ public sealed partial class StorageAdminService : IStorageAdminService
         await GetStorageBucketAsync(bucket, cancellationToken);
         ValidateObjectKey(key);
 
-        return await _storage.ListVersionsAsync(bucket, key, key, cancellationToken);
+        try
+        {
+            return await _storage.ListVersionsAsync(bucket, key, key, cancellationToken);
+        }
+        catch (StorageCapabilityNotSupportedException exception)
+        {
+            await _capabilities.MarkUnsupportedAsync(
+                exception.Capability,
+                exception.Message,
+                cancellationToken);
+            throw;
+        }
     }
 
     public async Task DeleteVersionAsync(
@@ -574,7 +688,14 @@ public sealed partial class StorageAdminService : IStorageAdminService
 
         try
         {
-            await GetStorageBucketAsync(bucket, cancellationToken);
+            var storageBucket = await GetStorageBucketAsync(bucket, cancellationToken);
+            var settings = await EnsureSettingsAsync(storageBucket, cancellationToken);
+
+            if (settings.ObjectLockEnabled)
+            {
+                throw new ObjectLockedException(bucket, key, settings.ObjectLockMode);
+            }
+
             await _storage.DeleteObjectAsync(bucket, key, versionId, cancellationToken);
 
             await RecordAuditAsync(
@@ -620,7 +741,33 @@ public sealed partial class StorageAdminService : IStorageAdminService
 
         try
         {
-            await GetStorageBucketAsync(command.Bucket, cancellationToken);
+            var storageBucket = await GetStorageBucketAsync(command.Bucket, cancellationToken);
+            var settings = await EnsureSettingsAsync(storageBucket, cancellationToken);
+
+            if (settings.ObjectLockEnabled)
+            {
+                var existing = await _storage.HeadObjectAsync(
+                    command.Bucket,
+                    command.Key,
+                    versionId: null,
+                    cancellationToken);
+
+                if (existing is not null)
+                {
+                    var versioning = await _storage.GetVersioningAsync(
+                        command.Bucket,
+                        cancellationToken);
+
+                    if (!versioning.Enabled)
+                    {
+                        throw new ObjectLockedException(
+                            command.Bucket,
+                            command.Key,
+                            settings.ObjectLockMode);
+                    }
+                }
+            }
+
             await _quotaGuard.EnsureCanWriteAsync(command.Bucket, command.Size, cancellationToken);
 
             var stored = await _storage.PutObjectAsync(
@@ -748,7 +895,14 @@ public sealed partial class StorageAdminService : IStorageAdminService
 
         try
         {
-            await GetStorageBucketAsync(bucket, cancellationToken);
+            var storageBucket = await GetStorageBucketAsync(bucket, cancellationToken);
+            var settings = await EnsureSettingsAsync(storageBucket, cancellationToken);
+
+            if (settings.ObjectLockEnabled)
+            {
+                throw new ObjectLockedException(bucket, key, settings.ObjectLockMode);
+            }
+
             await _storage.DeleteObjectAsync(bucket, key, versionId, cancellationToken);
 
             await RecordAuditAsync(
@@ -1015,6 +1169,59 @@ public sealed partial class StorageAdminService : IStorageAdminService
         return result;
     }
 
+    private async Task<ObjectLockMode> CreateBucketWithObjectLockAsync(
+        string bucket,
+        bool versioningEnabled,
+        bool objectLockEnabled,
+        CancellationToken cancellationToken)
+    {
+        if (!objectLockEnabled)
+        {
+            await _storage.CreateBucketAsync(
+                bucket,
+                versioningEnabled,
+                objectLockEnabled: false,
+                cancellationToken);
+
+            return ObjectLockMode.None;
+        }
+
+        var capabilities = await _capabilities.GetAsync(cancellationToken);
+
+        if (capabilities.ObjectLock)
+        {
+            try
+            {
+                await _storage.CreateBucketAsync(
+                    bucket,
+                    versioningEnabled,
+                    objectLockEnabled: true,
+                    cancellationToken);
+
+                return ObjectLockMode.Provider;
+            }
+            catch (StorageCapabilityNotSupportedException exception)
+                when (exception.Capability == StorageCapability.ObjectLock)
+            {
+                // Провайдер принял заголовок, но не сохранил конфигурацию.
+                // Бакет уже откатан адаптером; создаём его без S3-блокировки
+                // и включаем сервисную защиту.
+                await _capabilities.MarkUnsupportedAsync(
+                    StorageCapability.ObjectLock,
+                    "The provider accepted Object Lock but did not persist it.",
+                    cancellationToken);
+            }
+        }
+
+        await _storage.CreateBucketAsync(
+            bucket,
+            versioningEnabled,
+            objectLockEnabled: false,
+            cancellationToken);
+
+        return ObjectLockMode.Service;
+    }
+
     private async Task<BucketSummary> BuildSummaryAsync(
         StorageBucket bucket,
         BucketSettings settings,
@@ -1026,11 +1233,21 @@ public sealed partial class StorageAdminService : IStorageAdminService
         var stats = await _storage.GetUsageAsync(bucket.Name, refreshUsage, cancellationToken);
         var usage = ToUsage(stats, settings.QuotaBytes);
 
+        var objectLockMode = settings.ObjectLockMode != ObjectLockMode.None
+            ? settings.ObjectLockMode
+            : security.ObjectLockMode;
+
+        var effectiveSecurity = security with
+        {
+            ObjectLockEnabled = objectLockMode != ObjectLockMode.None,
+            ObjectLockMode = objectLockMode,
+        };
+
         return new BucketSummary(
             bucket.Name,
-            bucket.CreatedAt ?? settings.CreatedAt,
+            bucket.CreatedAt,
             versioning,
-            security,
+            effectiveSecurity,
             settings.AccessMode,
             usage);
     }
@@ -1250,7 +1467,7 @@ public sealed partial class StorageAdminService : IStorageAdminService
             cancellationToken);
     }
 
-    private Task RecordFailureAsync(
+    private async Task RecordFailureAsync(
         string actor,
         string action,
         string resource,
@@ -1258,7 +1475,15 @@ public sealed partial class StorageAdminService : IStorageAdminService
         CancellationToken cancellationToken,
         IReadOnlyList<string>? rolledBack = null)
     {
-        return RecordAuditAsync(
+        if (exception is StorageCapabilityNotSupportedException capability)
+        {
+            await _capabilities.MarkUnsupportedAsync(
+                capability.Capability,
+                exception.Message,
+                cancellationToken);
+        }
+
+        await RecordAuditAsync(
             actor,
             action,
             resource,

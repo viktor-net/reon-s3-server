@@ -26,6 +26,10 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
 
     public bool NotSupportedVersioning { get; set; }
 
+    public bool NotSupportedObjectLock { get; set; }
+
+    public HashSet<string> ObjectLockedBuckets { get; } = new(StringComparer.Ordinal);
+
     public Task<IReadOnlyList<StorageBucket>> ListBucketsAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<StorageBucket> result = Buckets
@@ -50,11 +54,22 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
         bool objectLockEnabled,
         CancellationToken cancellationToken)
     {
+        if (objectLockEnabled && NotSupportedObjectLock)
+        {
+            throw new StorageCapabilityNotSupportedException(StorageCapability.ObjectLock);
+        }
+
         Buckets[bucket] = DateTimeOffset.UtcNow;
         Objects[bucket] = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         Versioning[bucket] = new BucketVersioning(
             versioningEnabled || objectLockEnabled,
             Suspended: false);
+
+        if (objectLockEnabled)
+        {
+            ObjectLockedBuckets.Add(bucket);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -65,6 +80,7 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
         Policies.Remove(bucket);
         Versioning.Remove(bucket);
         Lifecycle.Remove(bucket);
+        ObjectLockedBuckets.Remove(bucket);
         return Task.CompletedTask;
     }
 
@@ -80,7 +96,7 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
     {
         if (NotSupportedVersioning)
         {
-            throw new StorageCapabilityNotSupportedException("bucket versioning");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.Versioning);
         }
 
         Versioning[bucket] = new BucketVersioning(enabled, Suspended: !enabled);
@@ -89,7 +105,12 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
 
     public Task<BucketSecurity> GetSecurityAsync(string bucket, CancellationToken cancellationToken)
     {
-        return Task.FromResult(new BucketSecurity(ObjectLockEnabled: false, Encryption: "AES256"));
+        var objectLockEnabled = ObjectLockedBuckets.Contains(bucket);
+
+        return Task.FromResult(new BucketSecurity(
+            objectLockEnabled,
+            Encryption: "AES256",
+            objectLockEnabled ? ObjectLockMode.Provider : ObjectLockMode.None));
     }
 
     public Task<string?> GetBucketPolicyAsync(string bucket, CancellationToken cancellationToken)
@@ -101,7 +122,7 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
     {
         if (NotSupportedPolicy)
         {
-            throw new StorageCapabilityNotSupportedException("bucket policy");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.BucketPolicy);
         }
 
         Policies[bucket] = policy;
@@ -227,7 +248,7 @@ public sealed class FakeObjectStorageAdmin : IObjectStorageAdmin
     {
         if (NotSupportedTagging)
         {
-            throw new StorageCapabilityNotSupportedException("object tags");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.ObjectTags);
         }
 
         Tags[bucket] = tags.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -302,8 +323,56 @@ public sealed class FakeBucketSettingsRepository : IBucketSettingsRepository
         return Task.CompletedTask;
     }
 
+    public Task DeleteAsync(string bucket, CancellationToken cancellationToken)
+    {
+        _settings.RemoveAll(settings => settings.Bucket == bucket);
+        return Task.CompletedTask;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FakeStorageCapabilityStore : IStorageCapabilityStore
+{
+    public StorageCapabilities Capabilities { get; set; } = new(
+        Versioning: true,
+        ObjectTags: true,
+        Lifecycle: true,
+        BucketPolicy: true,
+        ObjectLock: true);
+
+    public List<(StorageCapability Capability, string? Details)> MarkedUnsupported { get; } = [];
+
+    public Task<StorageCapabilities> GetAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Capabilities);
+    }
+
+    public Task EnsureSeededAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task MarkUnsupportedAsync(
+        StorageCapability capability,
+        string? details,
+        CancellationToken cancellationToken)
+    {
+        MarkedUnsupported.Add((capability, details));
+
+        Capabilities = capability switch
+        {
+            StorageCapability.Versioning => Capabilities with { Versioning = false },
+            StorageCapability.ObjectTags => Capabilities with { ObjectTags = false },
+            StorageCapability.Lifecycle => Capabilities with { Lifecycle = false },
+            StorageCapability.BucketPolicy => Capabilities with { BucketPolicy = false },
+            StorageCapability.ObjectLock => Capabilities with { ObjectLock = false },
+            _ => Capabilities,
+        };
+
         return Task.CompletedTask;
     }
 }

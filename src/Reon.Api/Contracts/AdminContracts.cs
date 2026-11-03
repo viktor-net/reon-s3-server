@@ -24,7 +24,8 @@ public sealed record BucketVersioningResponse(
 
 public sealed record BucketSecurityResponse(
     bool ObjectLockEnabled,
-    string? Encryption);
+    string? Encryption,
+    string ObjectLockMode = "None");
 
 public sealed record BucketUsageResponse(
     string Bucket,
@@ -41,6 +42,16 @@ public sealed record BucketListResponse(
     int Page,
     int PageSize);
 
+public sealed record StorageCapabilitiesResponse(
+    string Provider,
+    bool Versioning,
+    bool ObjectTags,
+    bool Lifecycle,
+    bool BucketPolicy,
+    bool ObjectLock,
+    long MaxFileSizeBytes,
+    DateTimeOffset UpdatedAt);
+
 public sealed record CreateBucketRequest(
     string Name,
     bool VersioningEnabled = false,
@@ -50,7 +61,8 @@ public sealed record CreateBucketRequest(
 public sealed record UpdateBucketRequest(
     bool? VersioningEnabled = null,
     long? QuotaBytes = null,
-    bool RemoveQuota = false);
+    bool RemoveQuota = false,
+    bool? ObjectLockEnabled = null);
 
 public sealed record SetBucketAccessRequest(string Mode);
 

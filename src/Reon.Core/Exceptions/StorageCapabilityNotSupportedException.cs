@@ -6,11 +6,11 @@ namespace Reon.Core.Exceptions;
 /// </summary>
 public sealed class StorageCapabilityNotSupportedException : Exception
 {
-    public StorageCapabilityNotSupportedException(string capability)
-        : base($"The object storage provider does not support {capability}.")
+    public StorageCapabilityNotSupportedException(StorageCapability capability)
+        : base($"The object storage provider does not support {capability.ToDisplayName()}.")
     {
         Capability = capability;
     }
 
-    public string Capability { get; }
+    public StorageCapability Capability { get; }
 }

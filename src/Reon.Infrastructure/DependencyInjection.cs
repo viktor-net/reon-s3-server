@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<IMultipartUploadRepository, MultipartUploadRepository>();
         services.AddScoped<IMultipartUploadService, MultipartUploadService>();
         services.AddScoped<IBucketSettingsRepository, BucketSettingsRepository>();
+        services.AddScoped<IStorageCapabilityStore, StorageCapabilityStore>();
         services.AddScoped<IAuditRepository, AuditRepository>();
         services.AddScoped<IStorageAuditor, StorageAuditor>();
         services.AddScoped<IStorageQuotaGuard, StorageQuotaGuard>();
@@ -103,6 +104,7 @@ public static class DependencyInjection
         services.AddScoped<IReconciliationService, ReconciliationService>();
         services.AddScoped<RetentionGcService>();
 
+        services.AddHostedService<StorageCapabilitySeeder>();
         services.AddHostedService<S3BucketInitializer>();
         services.AddHostedService<ReconciliationBackgroundService>();
         services.AddHostedService<OrphanSweepBackgroundService>();

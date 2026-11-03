@@ -32,10 +32,11 @@ public sealed class AdminBucketsController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         [FromQuery] string? sort = "name",
+        [FromQuery] string? direction = "asc",
         CancellationToken cancellationToken = default)
     {
         var result = await admin.ListBucketsAsync(
-            new BucketListQuery(search, page, pageSize, sort),
+            new BucketListQuery(search, page, pageSize, sort, direction),
             cancellationToken);
 
         return Ok(result.ToResponse());
@@ -82,8 +83,9 @@ public sealed class AdminBucketsController(
     }
 
     /// <summary>Изменить бакет</summary>
-    /// <remarks>Обновляет версионирование и квоту. Блокировку объектов нельзя
-    /// изменить после создания.</remarks>
+    /// <remarks>Обновляет версионирование, квоту и сервисную защиту от удаления.
+    /// Настоящий S3 Object Lock нельзя изменить после создания; сервисную
+    /// защиту можно снять через objectLockEnabled=false.</remarks>
     [HttpPatch("{bucket}")]
     [ProducesResponseType<BucketSummaryResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -98,11 +100,27 @@ public sealed class AdminBucketsController(
             new UpdateBucketCommand(
                 request.VersioningEnabled,
                 request.QuotaBytes,
-                request.RemoveQuota),
+                request.RemoveQuota,
+                request.ObjectLockEnabled),
             Actor,
             cancellationToken);
 
         return Ok(result.ToResponse());
+    }
+
+    /// <summary>Удалить бакет</summary>
+    /// <remarks>Удаляет пустой бакет и его административные настройки. Бакет
+    /// с включённой защитой от удаления удалить нельзя.</remarks>
+    [HttpDelete("{bucket}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> Delete(
+        string bucket,
+        CancellationToken cancellationToken)
+    {
+        await admin.DeleteBucketAsync(bucket, Actor, cancellationToken);
+        return NoContent();
     }
 
     /// <summary>Версионирование бакета</summary>
@@ -158,7 +176,7 @@ public sealed class AdminBucketsController(
         CancellationToken cancellationToken)
     {
         var access = await admin.GetBucketAccessAsync(bucket, cancellationToken);
-        return Ok(new BucketAccessResponse(access.Mode.ToString(), access.Policy));
+        return Ok(new BucketAccessResponse(access.Mode.ToApiValue(), access.Policy));
     }
 
     /// <summary>Изменить режим доступа</summary>
@@ -181,7 +199,7 @@ public sealed class AdminBucketsController(
             Actor,
             cancellationToken);
 
-        return Ok(new BucketAccessResponse(access.Mode.ToString(), access.Policy));
+        return Ok(new BucketAccessResponse(access.Mode.ToApiValue(), access.Policy));
     }
 
     /// <summary>Правила жизненного цикла</summary>
@@ -275,12 +293,9 @@ public sealed class AdminBucketsController(
 
     private static BucketAccessMode ParseAccessMode(string mode)
     {
-        return mode?.Trim().ToLowerInvariant() switch
-        {
-            "private" => BucketAccessMode.Private,
-            "public" or "publicread" or "public-read" or "download" => BucketAccessMode.PublicRead,
-            _ => throw new StorageValidationException(
-                "Mode must be 'private' or 'public-read'."),
-        };
+        return BucketAccessModeExtensions.TryParseApiValue(mode, out var parsed)
+            ? parsed
+            : throw new StorageValidationException(
+                "Mode must be 'private' or 'public-read'.");
     }
 }

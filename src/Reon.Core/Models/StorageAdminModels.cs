@@ -12,7 +12,8 @@ public sealed record BucketVersioning(
 
 public sealed record BucketSecurity(
     bool ObjectLockEnabled,
-    string? Encryption);
+    string? Encryption,
+    ObjectLockMode ObjectLockMode = ObjectLockMode.None);
 
 public sealed record LifecycleRule(
     string Id,
@@ -79,7 +80,8 @@ public sealed record BucketListQuery(
     string? Search = null,
     int Page = 1,
     int PageSize = 50,
-    string? Sort = "name");
+    string? Sort = "name",
+    string? Direction = "asc");
 
 public sealed record BucketListResult(
     IReadOnlyList<BucketSummary> Items,
@@ -96,7 +98,8 @@ public sealed record CreateBucketCommand(
 public sealed record UpdateBucketCommand(
     bool? VersioningEnabled,
     long? QuotaBytes,
-    bool RemoveQuota);
+    bool RemoveQuota,
+    bool? ObjectLockEnabled = null);
 
 public sealed record StorageOverview(
     int BucketCount,

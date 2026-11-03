@@ -4,6 +4,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using CoreBucketAlreadyExistsException = Reon.Core.Exceptions.BucketAlreadyExistsException;
 using CoreLifecycleRule = Reon.Core.Models.LifecycleRule;
+using CoreObjectLockMode = Reon.Core.Enums.ObjectLockMode;
 
 namespace Reon.Infrastructure.Storage;
 
@@ -19,6 +20,13 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
     private readonly AdminOptions _adminOptions;
     private readonly ILogger<S3ObjectStorageAdmin> _logger;
     private readonly ConcurrentDictionary<string, UsageCacheEntry> _usageCache = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Swift s3api не хранит дату создания бакета и отдаёт фиктивное значение.
+    /// Такая дата не должна выглядеть в UI как реальная.
+    /// </summary>
+    private static readonly DateTimeOffset SwiftSentinelCreationDate =
+        new(2009, 2, 3, 16, 45, 9, TimeSpan.Zero);
 
     /// <summary>
     /// Создаёт административный S3-адаптер.
@@ -48,9 +56,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
             return (response.Buckets ?? [])
                 .Select(bucket => new StorageBucket(
                     bucket.BucketName,
-                    bucket.CreationDate is { } createdAt
-                        ? new DateTimeOffset(createdAt.ToUniversalTime(), TimeSpan.Zero)
-                        : null))
+                    NormalizeCreationDate(bucket.CreationDate)))
                 .OrderBy(bucket => bucket.Name, StringComparer.Ordinal)
                 .ToArray();
         }
@@ -82,6 +88,28 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
                     ObjectLockEnabledForBucket = objectLockEnabled,
                 },
                 cancellationToken);
+
+            if (objectLockEnabled)
+            {
+                try
+                {
+                    if (!await GetObjectLockEnabledAsync(bucket, cancellationToken))
+                    {
+                        throw new StorageCapabilityNotSupportedException(
+                            StorageCapability.ObjectLock);
+                    }
+                }
+                catch (StorageCapabilityNotSupportedException)
+                {
+                    await TryDeleteCreatedBucketAsync(bucket, cancellationToken);
+                    throw;
+                }
+                catch (ObjectStorageException)
+                {
+                    await TryDeleteCreatedBucketAsync(bucket, cancellationToken);
+                    throw;
+                }
+            }
 
             if (versioningEnabled)
             {
@@ -124,6 +152,10 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             // Идемпотентное удаление.
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.Conflict)
+        {
+            throw new BucketNotEmptyException(bucket);
         }
         catch (AmazonS3Exception exception)
         {
@@ -178,7 +210,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (IsNotSupported(exception))
         {
-            throw new StorageCapabilityNotSupportedException("bucket versioning");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.Versioning);
         }
         catch (AmazonS3Exception exception)
         {
@@ -190,9 +222,12 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         string bucket,
         CancellationToken cancellationToken)
     {
+        var objectLockEnabled = await GetObjectLockEnabledAsync(bucket, cancellationToken);
+
         return new BucketSecurity(
-            await GetObjectLockEnabledAsync(bucket, cancellationToken),
-            await GetEncryptionAsync(bucket, cancellationToken));
+            objectLockEnabled,
+            await GetEncryptionAsync(bucket, cancellationToken),
+            objectLockEnabled ? CoreObjectLockMode.Provider : CoreObjectLockMode.None);
     }
 
     public async Task<string?> GetBucketPolicyAsync(
@@ -244,7 +279,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (IsNotSupported(exception))
         {
-            throw new StorageCapabilityNotSupportedException("bucket policy");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.BucketPolicy);
         }
         catch (AmazonS3Exception exception)
         {
@@ -338,7 +373,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (IsNotSupported(exception) || IsUnsupportedPayload(exception))
         {
-            throw new StorageCapabilityNotSupportedException("lifecycle rules");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.Lifecycle);
         }
         catch (AmazonS3Exception exception)
         {
@@ -580,7 +615,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (IsNotSupported(exception))
         {
-            throw new StorageCapabilityNotSupportedException("object versions");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.Versioning);
         }
         catch (AmazonS3Exception exception)
         {
@@ -643,7 +678,7 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         }
         catch (AmazonS3Exception exception) when (IsNotSupported(exception))
         {
-            throw new StorageCapabilityNotSupportedException("object tags");
+            throw new StorageCapabilityNotSupportedException(StorageCapability.ObjectTags);
         }
         catch (AmazonS3Exception exception)
         {
@@ -788,6 +823,17 @@ public sealed partial class S3ObjectStorageAdmin : IObjectStorageAdmin
         {
             LogRollbackFailed(_logger, exception, bucket);
         }
+    }
+
+    private static DateTimeOffset? NormalizeCreationDate(DateTime? createdAt)
+    {
+        if (createdAt is null)
+        {
+            return null;
+        }
+
+        var value = new DateTimeOffset(createdAt.Value.ToUniversalTime(), TimeSpan.Zero);
+        return value.UtcDateTime == SwiftSentinelCreationDate.UtcDateTime ? null : value;
     }
 
     private static string? NormalizeVersionId(string? versionId)

@@ -6,6 +6,7 @@ public sealed class StorageAdminServiceTests
 
     private readonly FakeObjectStorageAdmin _storage = new();
     private readonly FakeBucketSettingsRepository _settings = new();
+    private readonly FakeStorageCapabilityStore _capabilities = new();
     private readonly FakeAuditRepository _audit = new();
     private readonly FakeStorageEventPublisher _events = new();
     private readonly FakeClock _clock = new(Now);
@@ -27,6 +28,7 @@ public sealed class StorageAdminServiceTests
         _service = new StorageAdminService(
             _storage,
             _settings,
+            _capabilities,
             _audit,
             new FakeStorageAuditor(_audit),
             new FakeStorageQuotaGuard(_settings, _storage),
@@ -400,5 +402,212 @@ public sealed class StorageAdminServiceTests
         var usage = new BucketUsage("documents", 1, usedBytes, quotaBytes, Now);
 
         Assert.Equal(expectedStatus, usage.Status);
+    }
+
+    [Theory]
+    [InlineData(BucketAccessMode.Private, "private")]
+    [InlineData(BucketAccessMode.PublicRead, "public-read")]
+    public void BucketAccessMode_ToApiValue_ReturnsCanonicalValue(
+        BucketAccessMode mode,
+        string expected)
+    {
+        Assert.Equal(expected, mode.ToApiValue());
+    }
+
+    [Fact]
+    public async Task CreateBucketAsync_WhenObjectLockUnsupported_UsesServiceLock()
+    {
+        _capabilities.Capabilities = _capabilities.Capabilities with { ObjectLock = false };
+
+        var summary = await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        Assert.True(summary.Security.ObjectLockEnabled);
+        Assert.Equal(ObjectLockMode.Service, summary.Security.ObjectLockMode);
+
+        var settings = await _settings.GetAsync("documents", CancellationToken.None);
+        Assert.NotNull(settings);
+        Assert.True(settings.ObjectLockEnabled);
+        Assert.Equal(ObjectLockMode.Service, settings.ObjectLockMode);
+    }
+
+    [Fact]
+    public async Task CreateBucketAsync_WhenProviderAcceptsObjectLock_UsesProviderLock()
+    {
+        var summary = await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        Assert.True(summary.Security.ObjectLockEnabled);
+        Assert.Equal(ObjectLockMode.Provider, summary.Security.ObjectLockMode);
+    }
+
+    [Fact]
+    public async Task CreateBucketAsync_WhenProviderRejectsObjectLock_FallsBackToServiceLock()
+    {
+        _storage.NotSupportedObjectLock = true;
+
+        var summary = await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        Assert.Equal(ObjectLockMode.Service, summary.Security.ObjectLockMode);
+        Assert.Contains(
+            _capabilities.MarkedUnsupported,
+            item => item.Capability == StorageCapability.ObjectLock);
+    }
+
+    [Fact]
+    public async Task DeleteObjectAsync_WhenObjectLockEnabled_Throws()
+    {
+        _capabilities.Capabilities = _capabilities.Capabilities with { ObjectLock = false };
+        await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        await _service.UploadObjectAsync(
+            new UploadObjectCommand("documents", "protected.txt", "text/plain", 4),
+            new MemoryStream("data"u8.ToArray()),
+            "operator",
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<ObjectLockedException>(() =>
+            _service.DeleteObjectAsync(
+                "documents",
+                "protected.txt",
+                versionId: null,
+                "operator",
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UpdateBucketAsync_DisablingServiceLock_AllowsDeletion()
+    {
+        _capabilities.Capabilities = _capabilities.Capabilities with { ObjectLock = false };
+        await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        var updated = await _service.UpdateBucketAsync(
+            "documents",
+            new UpdateBucketCommand(
+                VersioningEnabled: null,
+                QuotaBytes: null,
+                RemoveQuota: false,
+                ObjectLockEnabled: false),
+            "admin",
+            CancellationToken.None);
+
+        Assert.False(updated.Security.ObjectLockEnabled);
+        Assert.Equal(ObjectLockMode.None, updated.Security.ObjectLockMode);
+
+        await _service.UploadObjectAsync(
+            new UploadObjectCommand("documents", "unlocked.txt", "text/plain", 4),
+            new MemoryStream("data"u8.ToArray()),
+            "operator",
+            CancellationToken.None);
+
+        await _service.DeleteObjectAsync(
+            "documents",
+            "unlocked.txt",
+            versionId: null,
+            "operator",
+            CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task UpdateBucketAsync_CannotDisableProviderLock()
+    {
+        await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<StorageValidationException>(() =>
+            _service.UpdateBucketAsync(
+                "documents",
+                new UpdateBucketCommand(
+                    VersioningEnabled: null,
+                    QuotaBytes: null,
+                    RemoveQuota: false,
+                    ObjectLockEnabled: false),
+                "admin",
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteBucketAsync_WhenObjectLockEnabled_Throws()
+    {
+        _capabilities.Capabilities = _capabilities.Capabilities with { ObjectLock = false };
+        await _service.CreateBucketAsync(
+            new CreateBucketCommand("documents", VersioningEnabled: false, ObjectLockEnabled: true, QuotaBytes: null),
+            "admin",
+            CancellationToken.None);
+
+        await Assert.ThrowsAsync<ObjectLockedException>(() =>
+            _service.DeleteBucketAsync("documents", "admin", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteBucketAsync_RemovesSettingsAndAudits()
+    {
+        _storage.Buckets["documents"] = Now;
+        await _settings.AddAsync(BucketSettings.Create("documents", null, Now), CancellationToken.None);
+
+        await _service.DeleteBucketAsync("documents", "admin", CancellationToken.None);
+
+        Assert.False(_storage.Buckets.ContainsKey("documents"));
+        Assert.Null(await _settings.GetAsync("documents", CancellationToken.None));
+        Assert.Contains(
+            _audit.Entries,
+            entry => entry.Action == "bucket.delete" && entry.Result == AuditResult.Success);
+    }
+
+    [Fact]
+    public async Task ListObjectsAsync_HidesCurrentFolderMarker()
+    {
+        _storage.Buckets["documents"] = Now;
+        _storage.Objects["documents"] = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["docs/"] = [],
+            ["docs/report.txt"] = "data"u8.ToArray(),
+        };
+
+        var listing = await _service.ListObjectsAsync(
+            new ObjectListQuery("documents", Prefix: "docs/"),
+            CancellationToken.None);
+
+        Assert.DoesNotContain(listing.Objects, item => item.ObjectKey == "docs/");
+        Assert.Contains(listing.Objects, item => item.ObjectKey == "docs/report.txt");
+    }
+
+    [Fact]
+    public async Task SetTagsAsync_WhenProviderDoesNotSupport_MarksCapability()
+    {
+        _storage.Buckets["documents"] = Now;
+        _storage.Objects["documents"] = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["a.txt"] = "data"u8.ToArray(),
+        };
+        _storage.NotSupportedTagging = true;
+
+        await Assert.ThrowsAsync<StorageCapabilityNotSupportedException>(() =>
+            _service.SetTagsAsync(
+                "documents",
+                "a.txt",
+                versionId: null,
+                new Dictionary<string, string> { ["env"] = "test" },
+                "admin",
+                CancellationToken.None));
+
+        Assert.Contains(
+            _capabilities.MarkedUnsupported,
+            item => item.Capability == StorageCapability.ObjectTags);
     }
 }
