@@ -18,6 +18,7 @@ public static class TelemetryExtensions
     /// <summary>Профиль наблюдаемости REON.</summary>
     public const string ObservabilityProfile = "REON-OBS-1.0";
 
+    private const string EnabledSetting = "Observability:Enabled";
     private const string OtlpEndpointSetting = "Observability:OtlpEndpoint";
     private const string DefaultOtlpEndpoint = "http://localhost:10004";
 
@@ -32,12 +33,20 @@ public static class TelemetryExtensions
     /// Адрес коллектора берётся из <c>Observability:OtlpEndpoint</c> или
     /// стандартной переменной <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>; по умолчанию
     /// используется <c>http://localhost:10004</c> для локального запуска.
+    /// Если <c>Observability:Enabled</c> равно <c>false</c>, SDK не
+    /// регистрируется и приложение не пытается отправлять спаны. Это нужно
+    /// для окружений без коллектора, чтобы не копить ошибки экспорта в логах.
     /// </remarks>
     public static IServiceCollection AddReonTelemetry(
         this IServiceCollection services,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
+        if (!configuration.GetValue(EnabledSetting, true))
+        {
+            return services;
+        }
+
         var endpoint = configuration[OtlpEndpointSetting]
             ?? configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
             ?? DefaultOtlpEndpoint;
