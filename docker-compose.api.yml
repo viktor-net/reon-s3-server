@@ -60,6 +60,9 @@ services:
       Admin__DownloadLinkSecret: ${DOWNLOAD_LINK_SECRET:?Задайте DOWNLOAD_LINK_SECRET в .env}
       Database__AutoMigrate: ${DATABASE_AUTO_MIGRATE:-true}
       # Спаны и метрики уходят в коллектор по OTLP/gRPC.
+      # appsettings.Production.json выключает OTel для окружений без
+      # коллектора, поэтому в локальном стенде включаем явно.
+      Observability__Enabled: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       # Контейнерные логи читает stdout/коллектор, поэтому всегда JSON.
       Serilog__Console__Json: "true"
