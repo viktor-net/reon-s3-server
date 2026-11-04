@@ -106,6 +106,46 @@ docker compose --profile dev-tools up -d
 `docs` и `filestash` подключаются к `s3-internal` и получают доступ к S3 —
 это осознанное исключение только для локальной разработки.
 
+### 3. Production-подобный запуск в Docker: внешний S3, без коллектора
+
+Если S3 уже работает на отдельной виртуалке, а OpenTelemetry Collector не
+нужен, используйте `docker-compose.prod.yml`. Он поднимает только API и
+Postgres, не запускает Swift и коллектор, а S3 задаётся через
+`S3_SERVICE_URL`.
+
+Заполните `.env`:
+
+```bash
+POSTGRES_PASSWORD=...
+S3_SERVICE_URL=http://10.20.0.15:8080   # IP:порт существующего S3
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+DOWNLOAD_LINK_SECRET=...                # минимум 32 символа
+API_PUBLIC_BASE_URL=http://<IP_сервера>:10007
+```
+
+Запуск:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Проверка:
+
+```bash
+curl -i http://localhost:10007/health/live
+curl -i http://localhost:10007/health/ready
+curl -i http://localhost:10007/openapi/api.json
+```
+
+Scalar UI — `http://<IP_сервера>:10007/scalar/api`. Коллектор не запускается:
+в `appsettings.Production.json` стоит `"Observability": { "Enabled": false }`,
+поэтому OTel SDK не регистрируется и спаны никуда не отправляются. Логи API
+идут в stdout в JSON, смотреть — `docker logs reon-s3-api`.
+
+Если S3 должен работать локально вместе с API, используйте вариант 2 выше
+(`docker-compose.yml` + `docker-compose.api.yml`).
+
 ### Адреса стенда
 
 - API: localhost:10007, Scalar UI — localhost:10007/scalar/api
